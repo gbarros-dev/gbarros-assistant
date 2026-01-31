@@ -1,0 +1,29 @@
+{
+  "name": "@gbarros-assistant/agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "lint": "oxlint",
+    "format": "oxfmt --write",
+    "format:check": "oxfmt --check",
+    "typecheck": "bunx tsc -p convex/tsconfig.json --noEmit",
+    "knip": "knip",
+    "knip:fix": "knip --fix --allow-remove-files",
+    "clean": "git clean -xdf .cache .turbo node_modules convex/_generated"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@gbarros-assistant/backend": "workspace:*",
+    "baileys": "^6.7.16",
+    "convex": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@gbarros-assistant/config": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
