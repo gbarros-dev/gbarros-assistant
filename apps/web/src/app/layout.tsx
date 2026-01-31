@@ -1,10 +1,10 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
+import { Outfit } from "next/font/google";
 
 import "../index.css";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import Header from "@/components/header";
 import Providers from "@/components/providers";
 
 const geistSans = Geist({
@@ -17,9 +17,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const outfit = Outfit({
+  variable: "--font-outfit",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "gbarros-assistant",
-  description: "gbarros-assistant",
+  title: "Zenthor Assist",
+  description: "Zenthor Assist — your intelligent companion",
 };
 
 export default function RootLayout({
@@ -29,7 +34,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} antialiased`}
+      >
         <ClerkProvider
           signInUrl="/sign-in"
           signUpUrl="/sign-up"
@@ -37,10 +44,7 @@ export default function RootLayout({
           signUpFallbackRedirectUrl="/load"
         >
           <Providers>
-            <div className="grid h-svh grid-rows-[auto_1fr]">
-              <Header />
-              {children}
-            </div>
+            <div className="h-svh">{children}</div>
           </Providers>
         </ClerkProvider>
       </body>
