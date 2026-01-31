@@ -3,24 +3,56 @@ import { mutation, query } from "./_generated/server";
 
 export const getOrCreate = mutation({
   args: {
-    contactId: v.id("contacts"),
+    userId: v.optional(v.id("users")),
+    contactId: v.optional(v.id("contacts")),
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
+    if (args.channel === "web" && args.userId) {
+      const existing = await ctx.db
+        .query("conversations")
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .filter((q) => q.eq(q.field("channel"), "web"))
+        .filter((q) => q.eq(q.field("status"), "active"))
+        .first();
+
+      if (existing) return existing._id;
+
+      return await ctx.db.insert("conversations", {
+        userId: args.userId,
+        channel: "web",
+        status: "active",
+      });
+    }
+
+    if (args.channel === "whatsapp" && args.contactId) {
+      const existing = await ctx.db
+        .query("conversations")
+        .withIndex("by_contactId", (q) => q.eq("contactId", args.contactId))
+        .filter((q) => q.eq(q.field("channel"), "whatsapp"))
+        .filter((q) => q.eq(q.field("status"), "active"))
+        .first();
+
+      if (existing) return existing._id;
+
+      return await ctx.db.insert("conversations", {
+        contactId: args.contactId,
+        channel: "whatsapp",
+        status: "active",
+      });
+    }
+
+    throw new Error("Must provide userId for web or contactId for whatsapp");
+  },
+});
+
+export const listByUser = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    return await ctx.db
       .query("conversations")
-      .withIndex("by_contactId", (q) => q.eq("contactId", args.contactId))
-      .filter((q) => q.eq(q.field("channel"), args.channel))
-      .filter((q) => q.eq(q.field("status"), "active"))
-      .first();
-
-    if (existing) return existing._id;
-
-    return await ctx.db.insert("conversations", {
-      contactId: args.contactId,
-      channel: args.channel,
-      status: "active",
-    });
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .collect();
   },
 });
 

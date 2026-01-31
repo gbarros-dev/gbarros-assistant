@@ -11,45 +11,11 @@ export const getByPhone = query({
   },
 });
 
-export const getByClerkUserId = query({
-  args: { clerkUserId: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("contacts")
-      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", args.clerkUserId))
-      .first();
-  },
-});
-
-export const getOrCreateFromClerk = mutation({
-  args: {
-    clerkUserId: v.string(),
-    name: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("contacts")
-      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", args.clerkUserId))
-      .first();
-
-    if (existing) return existing._id;
-
-    return await ctx.db.insert("contacts", {
-      clerkUserId: args.clerkUserId,
-      name: args.name,
-      isAllowed: true,
-      channel: "web",
-    });
-  },
-});
-
 export const create = mutation({
   args: {
-    phone: v.optional(v.string()),
+    phone: v.string(),
     name: v.string(),
     isAllowed: v.boolean(),
-    channel: v.union(v.literal("whatsapp"), v.literal("web")),
-    clerkUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("contacts", args);

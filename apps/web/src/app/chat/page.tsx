@@ -1,10 +1,10 @@
 "use client";
 
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@clerk/nextjs";
+import Link from "next/link";
+
 import { ChatLayout } from "@/components/chat/chat-layout";
 import Loader from "@/components/loader";
-import { Button } from "@/components/ui/button";
 
 export default function ChatPage() {
   return (
@@ -17,9 +17,12 @@ export default function ChatPage() {
       <Unauthenticated>
         <div className="flex h-full flex-col items-center justify-center gap-4">
           <p className="text-muted-foreground">Sign in to start chatting</p>
-          <SignInButton>
-            <Button>Sign In</Button>
-          </SignInButton>
+          <Link
+            href={"/sign-in" as any}
+            className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium"
+          >
+            Sign In
+          </Link>
         </div>
       </Unauthenticated>
       <Authenticated>

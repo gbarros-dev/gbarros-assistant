@@ -2,22 +2,34 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  users: defineTable({
+    externalId: v.string(),
+    name: v.string(),
+    email: v.string(),
+    emailVerified: v.optional(v.boolean()),
+    image: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("inactive")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_email", ["email"]),
+
   contacts: defineTable({
-    phone: v.optional(v.string()),
+    phone: v.string(),
     name: v.string(),
     isAllowed: v.boolean(),
-    channel: v.union(v.literal("whatsapp"), v.literal("web")),
-    clerkUserId: v.optional(v.string()),
-  })
-    .index("by_phone", ["phone"])
-    .index("by_clerkUserId", ["clerkUserId"]),
+  }).index("by_phone", ["phone"]),
 
   conversations: defineTable({
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
-    contactId: v.id("contacts"),
+    userId: v.optional(v.id("users")),
+    contactId: v.optional(v.id("contacts")),
     title: v.optional(v.string()),
     status: v.union(v.literal("active"), v.literal("archived")),
-  }).index("by_contactId", ["contactId"]),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_contactId", ["contactId"]),
 
   messages: defineTable({
     conversationId: v.id("conversations"),

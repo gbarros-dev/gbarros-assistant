@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@gbarros-assistant/backend/convex/_generated/api";
 import type { Id } from "@gbarros-assistant/backend/convex/_generated/dataModel";
 import { ConversationList } from "./conversation-list";
@@ -11,10 +11,10 @@ import Loader from "@/components/loader";
 
 export function ChatLayout() {
   const { user } = useUser();
-  const getOrCreateContact = useMutation(api.contacts.getOrCreateFromClerk);
+  const getOrCreateUser = useMutation(api.users.getOrCreateFromClerk);
   const getOrCreateConversation = useMutation(api.conversations.getOrCreate);
 
-  const [contactId, setContactId] = useState<Id<"contacts"> | null>(null);
+  const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -22,14 +22,16 @@ export function ChatLayout() {
     if (!user) return;
 
     async function init() {
-      const cId = await getOrCreateContact({
-        clerkUserId: user!.id,
+      const uId = await getOrCreateUser({
+        externalId: user!.id,
         name: user!.fullName || user!.firstName || "User",
+        email: user!.primaryEmailAddress?.emailAddress,
+        image: user!.imageUrl,
       });
-      setContactId(cId);
+      setUserId(uId);
 
       const convId = await getOrCreateConversation({
-        contactId: cId,
+        userId: uId,
         channel: "web",
       });
       setConversationId(convId);
@@ -39,7 +41,7 @@ export function ChatLayout() {
     init();
   }, [user]);
 
-  if (loading || !contactId || !conversationId) {
+  if (loading || !userId || !conversationId) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader />
@@ -52,7 +54,7 @@ export function ChatLayout() {
       <aside className="hidden w-64 shrink-0 border-r md:block">
         <div className="border-b p-3 text-sm font-medium">Conversations</div>
         <ConversationList
-          contactId={contactId}
+          userId={userId}
           activeConversationId={conversationId}
           onSelect={setConversationId}
         />

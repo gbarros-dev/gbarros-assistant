@@ -22,7 +22,6 @@ export async function handleIncomingMessage(message: WAMessage) {
       phone,
       name: phone,
       isAllowed: false,
-      channel: "whatsapp",
     });
     contact = await client.query(api.contacts.getByPhone, { phone });
   }

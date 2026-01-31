@@ -7,17 +7,17 @@ import { cn } from "@/lib/utils";
 import { MessageSquare } from "lucide-react";
 
 interface ConversationListProps {
-  contactId: Id<"contacts">;
+  userId: Id<"users">;
   activeConversationId: Id<"conversations"> | null;
   onSelect: (id: Id<"conversations">) => void;
 }
 
 export function ConversationList({
-  contactId,
+  userId,
   activeConversationId,
   onSelect,
 }: ConversationListProps) {
-  const conversations = useQuery(api.conversations.listByContact, { contactId });
+  const conversations = useQuery(api.conversations.listByUser, { userId });
 
   if (!conversations || conversations.length === 0) {
     return (

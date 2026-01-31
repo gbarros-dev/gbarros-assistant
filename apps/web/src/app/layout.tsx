@@ -1,6 +1,5 @@
-import type { Metadata } from "next";
-
 import { ClerkProvider } from "@clerk/nextjs";
+import type { Metadata } from "next";
 
 import "../index.css";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -31,9 +30,14 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ClerkProvider>
+        <ClerkProvider
+          signInUrl="/sign-in"
+          signUpUrl="/sign-up"
+          signInFallbackRedirectUrl="/load"
+          signUpFallbackRedirectUrl="/load"
+        >
           <Providers>
-            <div className="grid grid-rows-[auto_1fr] h-svh">
+            <div className="grid h-svh grid-rows-[auto_1fr]">
               <Header />
               {children}
             </div>

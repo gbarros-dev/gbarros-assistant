@@ -42,7 +42,9 @@ export const getConversationContext = query({
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) return null;
 
-    const contact = await ctx.db.get(conversation.contactId);
+    const user = conversation.userId ? await ctx.db.get(conversation.userId) : null;
+    const contact = conversation.contactId ? await ctx.db.get(conversation.contactId) : null;
+
     const messages = await ctx.db
       .query("messages")
       .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
@@ -53,6 +55,6 @@ export const getConversationContext = query({
       .filter((q) => q.eq(q.field("enabled"), true))
       .collect();
 
-    return { conversation, contact, messages, skills };
+    return { conversation, user, contact, messages, skills };
   },
 });
