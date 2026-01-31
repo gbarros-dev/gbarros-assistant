@@ -37,12 +37,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} antialiased`}
       >
-        <ClerkProvider
-          signInUrl="/sign-in"
-          signUpUrl="/sign-up"
-          signInFallbackRedirectUrl="/load"
-          signUpFallbackRedirectUrl="/load"
-        >
+        <ClerkProvider signInUrl="/sign-in" afterSignInUrl="/" afterSignUpUrl="/">
           <Providers>
             <div className="h-svh">{children}</div>
           </Providers>
