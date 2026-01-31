@@ -7,6 +7,7 @@ import { useMutation } from "convex/react";
 import { useState, useEffect } from "react";
 
 import Loader from "@/components/loader";
+import { ZenthorMark } from "@/components/zenthor-logo";
 
 import { ChatArea } from "./chat-area";
 import { ConversationList } from "./conversation-list";
@@ -54,7 +55,10 @@ export function ChatLayout() {
   return (
     <div className="flex h-full">
       <aside className="hidden w-64 shrink-0 border-r md:block">
-        <div className="border-b p-3 text-sm font-medium">Conversations</div>
+        <div className="flex items-center gap-2 border-b p-3 text-sm font-medium">
+          <ZenthorMark className="text-primary size-5" />
+          Conversations
+        </div>
         <ConversationList
           userId={userId}
           activeConversationId={conversationId}
