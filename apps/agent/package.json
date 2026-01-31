@@ -9,14 +9,18 @@
     "lint": "oxlint",
     "format": "oxfmt --write",
     "format:check": "oxfmt --check",
-    "typecheck": "bunx tsc -p convex/tsconfig.json --noEmit",
+    "typecheck": "bunx tsc --noEmit",
     "knip": "knip",
     "knip:fix": "knip --fix --allow-remove-files",
     "clean": "git clean -xdf .cache .turbo node_modules convex/_generated"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@ai-sdk/anthropic": "^3.0.33",
+    "@ai-sdk/gateway": "^3.0.29",
+    "@ai-sdk/google": "^3.0.18",
+    "@ai-sdk/openai": "^3.0.23",
     "@gbarros-assistant/backend": "workspace:*",
+    "ai": "^6.0.0",
     "baileys": "^6.7.16",
     "convex": "catalog:",
     "zod": "catalog:"
@@ -25,5 +29,15 @@
     "@gbarros-assistant/config": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:"
+  },
+  "knip": {
+    "ignoreBinaries": [
+      "oxlint",
+      "oxfmt",
+      "knip"
+    ],
+    "ignoreDependencies": [
+      "@gbarros-assistant/backend"
+    ]
   }
 }

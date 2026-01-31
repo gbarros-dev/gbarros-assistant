@@ -1,11 +1,12 @@
 import { api } from "@gbarros-assistant/backend/convex/_generated/api";
+
 import { getConvexClient } from "../convex/client";
-import { generateResponse } from "./claude";
 import { sendWhatsAppMessage } from "../whatsapp/sender";
+import { generateResponse } from "./generate";
 
 export function startAgentLoop() {
   const client = getConvexClient();
-  console.log("[agent] Starting agent loop — subscribing to pending jobs...");
+  console.info("[agent] Starting agent loop — subscribing to pending jobs...");
 
   client.onUpdate(api.agent.getPendingJobs, {}, async (jobs) => {
     if (!jobs || jobs.length === 0) return;
@@ -15,7 +16,7 @@ export function startAgentLoop() {
         const claimed = await client.mutation(api.agent.claimJob, { jobId: job._id });
         if (!claimed) continue;
 
-        console.log(`[agent] Processing job ${job._id} for conversation ${job.conversationId}`);
+        console.info(`[agent] Processing job ${job._id} for conversation ${job.conversationId}`);
 
         const context = await client.query(api.agent.getConversationContext, {
           conversationId: job.conversationId,
@@ -43,7 +44,7 @@ export function startAgentLoop() {
         }
 
         await client.mutation(api.agent.completeJob, { jobId: job._id });
-        console.log(`[agent] Completed job ${job._id}`);
+        console.info(`[agent] Completed job ${job._id}`);
       } catch (error) {
         console.error(`[agent] Failed job ${job._id}:`, error);
         await client.mutation(api.agent.failJob, { jobId: job._id }).catch(() => {});
