@@ -1,25 +1,64 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://v2-7-6.turborepo.dev/schema.json",
   "ui": "tui",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "lint": {
-      "dependsOn": ["^lint"]
+      "dependsOn": []
     },
-    "check-types": {
-      "dependsOn": ["^check-types"]
+    "format": {
+      "dependsOn": []
     },
-    "dev": {
-      "cache": false,
-      "persistent": true
+    "format:check": {
+      "dependsOn": []
     },
-    "dev:setup": {
-      "cache": false,
-      "persistent": true
+    "typecheck": {
+      "dependsOn": []
+    },
+    "knip": {
+      "dependsOn": [],
+      "outputs": []
+    },
+    "knip:fix": {
+      "dependsOn": [],
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    },
+    "//#clean": {
+      "cache": false
     }
-  }
+  },
+  "globalEnv": [
+    "VERCEL_URL",
+    "PORT",
+    "CLERK_SECRET_KEY",
+    "CLERK_WEBHOOK_SECRET",
+    "RESEND_API_KEY",
+    "RESEND_FROM_EMAIL",
+    "SENTRY_DSN",
+    "SENTRY_ORG",
+    "SENTRY_PROJECT",
+    "CONVEX_DEPLOY_KEY",
+    "MAINTENANCE_MODE",
+    "VITE_CONVEX_URL",
+    "VITE_CLERK_PUBLISHABLE_KEY",
+    "VITE_CLERK_SIGN_IN_URL",
+    "VITE_CLERK_SIGN_UP_URL",
+    "VITE_MAINTENANCE_MODE",
+    "VITE_APP_URL"
+  ],
+  "globalPassThroughEnv": [
+    "NODE_ENV",
+    "CI",
+    "VERCEL",
+    "VERCEL_ENV",
+    "VERCEL_URL",
+    "npm_lifecycle_event"
+  ]
 }
