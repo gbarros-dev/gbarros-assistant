@@ -1,6 +1,7 @@
 "use client";
 
-import { Bot, User } from "lucide-react";
+import { BotIcon, UserIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -18,9 +19,9 @@ export function MessageBubble({ role, content }: MessageBubbleProps) {
       <Avatar className={cn("mt-0.5", isUser ? "bg-primary" : "bg-muted")}>
         <AvatarFallback>
           {isUser ? (
-            <User className="text-primary-foreground size-4" />
+            <HugeiconsIcon icon={UserIcon} className="text-primary-foreground size-4" />
           ) : (
-            <Bot className="text-foreground size-4" />
+            <HugeiconsIcon icon={BotIcon} className="text-foreground size-4" />
           )}
         </AvatarFallback>
       </Avatar>
