@@ -28,7 +28,7 @@ This is a **Bun monorepo** (workspaces in `apps/*` and `packages/*`) using **Tur
 
 - **`apps/agent`** — Bun CLI process that polls Convex for pending agent jobs, generates Claude responses via Vercel AI SDK (`ai` + `@ai-sdk/anthropic`), and optionally sends replies over WhatsApp (Baileys). Entry point: `src/index.ts`.
 - **`apps/backend`** — Convex backend. Database schema in `convex/schema.ts`, server functions in `convex/*.ts`. Types auto-generated in `convex/_generated/`. Clerk webhook handler in `convex/clerk/`.
-- **`apps/web`** — Next.js 16 app with Clerk auth and Convex real-time subscriptions. Uses React 19, shadcn/ui, TailwindCSS v4, and React Compiler.
+- **`apps/web`** — Next.js 16 app with Clerk auth and Convex real-time subscriptions. Uses React 19, shadcn/ui, TailwindCSS v4, and React Compiler. Route protection is handled in `src/proxy.ts` (Next.js 16 replaces `middleware.ts` with `proxy.ts`). Protected routes: `/chat`, `/dashboard`.
 
 ### Packages
 
