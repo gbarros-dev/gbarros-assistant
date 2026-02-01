@@ -52,6 +52,66 @@ export const addAssistantMessage = mutation({
   },
 });
 
+export const addSummaryMessage = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+    content: v.string(),
+    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("messages", {
+      conversationId: args.conversationId,
+      role: "system",
+      content: args.content,
+      channel: args.channel,
+      status: "sent",
+    });
+  },
+});
+
+export const createPlaceholder = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("messages", {
+      conversationId: args.conversationId,
+      role: "assistant",
+      content: "",
+      channel: args.channel,
+      streaming: true,
+      status: "pending",
+    });
+  },
+});
+
+export const updateStreamingContent = mutation({
+  args: {
+    messageId: v.id("messages"),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.messageId, { content: args.content });
+  },
+});
+
+export const finalizeMessage = mutation({
+  args: {
+    messageId: v.id("messages"),
+    content: v.string(),
+    toolCalls: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.messageId, {
+      content: args.content,
+      toolCalls: args.toolCalls,
+      streaming: false,
+      status: "sent",
+    });
+  },
+});
+
 export const listByConversation = query({
   args: { conversationId: v.id("conversations") },
   handler: async (ctx, args) => {

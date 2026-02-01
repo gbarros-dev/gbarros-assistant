@@ -37,6 +37,17 @@ export const failJob = mutation({
   },
 });
 
+export const isProcessing = query({
+  args: { conversationId: v.id("conversations") },
+  handler: async (ctx, args) => {
+    const jobs = await ctx.db
+      .query("agentQueue")
+      .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
+      .collect();
+    return jobs.some((j) => j.status === "pending" || j.status === "processing");
+  },
+});
+
 export const getConversationContext = query({
   args: { conversationId: v.id("conversations") },
   handler: async (ctx, args) => {

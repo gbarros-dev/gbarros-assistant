@@ -37,6 +37,7 @@ export default defineSchema({
     content: v.string(),
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
     toolCalls: v.optional(v.any()),
+    streaming: v.optional(v.boolean()),
     status: v.union(
       v.literal("pending"),
       v.literal("sent"),
