@@ -1,9 +1,9 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
+import { env } from "@zenthor-assist/env/agent";
 import type { Tool } from "ai";
 
 import { getConvexClient } from "../convex/client";
-import { sendWhatsAppMessage } from "../whatsapp/sender";
 
 const HIGH_RISK_TOOLS: Set<string> = new Set();
 
@@ -87,10 +87,24 @@ export function wrapToolsWithApproval(
         });
 
         if (context.channel === "whatsapp" && context.phone) {
-          await sendWhatsAppMessage(
-            context.phone,
-            `🔐 I'd like to use the tool '${name}'. Reply YES to approve or NO to reject.`,
-          );
+          const prompt = `🔐 I'd like to use the tool '${name}'. Reply YES to approve or NO to reject.`;
+          const messageId = await client.mutation(api.messages.addAssistantMessage, {
+            conversationId: context.conversationId as Id<"conversations">,
+            content: prompt,
+            channel: "whatsapp",
+          });
+          await client.mutation(api.delivery.enqueueOutbound, {
+            channel: "whatsapp",
+            accountId: env.WHATSAPP_ACCOUNT_ID ?? "default",
+            conversationId: context.conversationId as Id<"conversations">,
+            messageId,
+            to: context.phone,
+            content: prompt,
+            metadata: {
+              kind: "tool_approval_request",
+              toolName: name,
+            },
+          });
         }
 
         console.info(`[tool-approval] Waiting for approval on tool '${name}' (id: ${approvalId})`);

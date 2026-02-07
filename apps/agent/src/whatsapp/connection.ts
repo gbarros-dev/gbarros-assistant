@@ -26,7 +26,8 @@ const logger = {
   },
 } as never;
 
-export async function startWhatsApp() {
+export async function startWhatsApp(options?: { enableIngress?: boolean }) {
+  const enableIngress = options?.enableIngress ?? true;
   const { version } = await fetchLatestBaileysVersion();
   console.info(`[whatsapp] Using Baileys version ${version.join(".")}`);
 
@@ -64,22 +65,26 @@ export async function startWhatsApp() {
         `[whatsapp] Connection closed (status: ${statusCode}), reconnecting: ${shouldReconnect}`,
       );
       if (shouldReconnect) {
-        startWhatsApp();
+        startWhatsApp(options);
       }
     } else if (connection === "open") {
       console.info("[whatsapp] Connected successfully");
     }
   });
 
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    for (const msg of messages) {
-      try {
-        await handleIncomingMessage(msg);
-      } catch (error) {
-        console.error("[whatsapp] Error handling message:", error);
+  if (enableIngress) {
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+      for (const msg of messages) {
+        try {
+          await handleIncomingMessage(msg);
+        } catch (error) {
+          console.error("[whatsapp] Error handling message:", error);
+        }
       }
-    }
-  });
+    });
+  } else {
+    console.info("[whatsapp] Ingress listener disabled for this runtime");
+  }
 
   return sock;
 }

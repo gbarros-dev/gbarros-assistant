@@ -8,8 +8,7 @@ export function setWhatsAppSocket(sock: WASocket) {
 
 export async function sendWhatsAppMessage(phone: string, text: string) {
   if (!socket) {
-    console.warn("[whatsapp] Socket not connected, cannot send message");
-    return;
+    throw new Error("WhatsApp socket not connected");
   }
 
   const jid = `${phone}@s.whatsapp.net`;

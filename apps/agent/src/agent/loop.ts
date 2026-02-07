@@ -1,17 +1,16 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import { env } from "@zenthor-assist/env/agent";
+import type { Tool } from "ai";
 
 import { getConvexClient } from "../convex/client";
-import { sendWhatsAppMessage } from "../whatsapp/sender";
 import { compactMessages } from "./compact";
 import { evaluateContext } from "./context-guard";
 import { classifyError, isRetryable } from "./errors";
 import type { AgentConfig } from "./generate";
 import { generateResponse, generateResponseStreaming } from "./generate";
+import { resolvePluginTools, syncBuiltinPluginDefinitions } from "./plugins/loader";
 import { wrapToolsWithApproval } from "./tool-approval";
 import { filterTools, getDefaultPolicy, mergeToolPolicies } from "./tool-policy";
-import { tools } from "./tools";
-import { getWebSearchTool } from "./tools/web-search";
 
 /** Convert any remaining markdown syntax to WhatsApp-compatible formatting */
 function sanitizeForWhatsApp(text: string): string {
@@ -23,10 +22,10 @@ function sanitizeForWhatsApp(text: string): string {
       .replace(/__(.+?)__/g, "*$1*")
       // Convert markdown headers to bold lines
       .replace(/^#{1,6}\s+(.+)$/gm, "*$1*")
+      // Strip image syntax ![alt](url) → alt: url (must run before link replacement)
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1: $2")
       // Convert [text](url) → text (url)
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
-      // Strip image syntax ![alt](url) → alt: url
-      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1: $2")
       // Convert horizontal rules (---, ***) to a simple line
       .replace(/^[-*_]{3,}$/gm, "───")
       // Clean up any triple+ newlines to double
@@ -38,6 +37,9 @@ function sanitizeForWhatsApp(text: string): string {
 export function startAgentLoop() {
   const client = getConvexClient();
   console.info("[agent] Starting agent loop — subscribing to pending jobs...");
+  syncBuiltinPluginDefinitions(client).catch((error) => {
+    console.warn("[agent] Failed to sync builtin plugin definitions:", error);
+  });
 
   client.onUpdate(api.agent.getPendingJobs, {}, async (jobs) => {
     if (!jobs || jobs.length === 0) return;
@@ -104,20 +106,27 @@ export function startAgentLoop() {
           );
         }
 
+        const channel = context.conversation.channel as "web" | "whatsapp";
+        const pluginTools = await resolvePluginTools({
+          client,
+          channel,
+          agentId: context.conversation.agentId ?? undefined,
+          modelName: env.AI_MODEL,
+        });
+
         // Build channel-aware tool policy
-        const channelPolicy = getDefaultPolicy(context.conversation.channel as "web" | "whatsapp");
+        const channelPolicy = getDefaultPolicy(channel);
         const skillPolicies = context.skills
           .filter((s) => s.config?.toolPolicy)
           .map((s) => s.config!.toolPolicy!);
         const policies = [channelPolicy, ...skillPolicies];
+        if (pluginTools.policy) policies.push(pluginTools.policy);
         if (agentConfig?.toolPolicy) policies.push(agentConfig.toolPolicy);
         const mergedPolicy = policies.length > 1 ? mergeToolPolicies(...policies) : channelPolicy;
 
-        const allTools = { ...tools, ...getWebSearchTool(env.AI_MODEL) };
-        const filteredTools = filterTools(allTools, mergedPolicy);
+        const filteredTools = filterTools(pluginTools.tools, mergedPolicy) as Record<string, Tool>;
 
         // Wrap high-risk tools with approval flow
-        const channel = context.conversation.channel as "web" | "whatsapp";
         const approvalTools = wrapToolsWithApproval(filteredTools, {
           jobId: job._id,
           conversationId: job.conversationId,
@@ -175,7 +184,7 @@ export function startAgentLoop() {
           const content =
             channel === "whatsapp" ? sanitizeForWhatsApp(response.content) : response.content;
 
-          await client.mutation(api.messages.addAssistantMessage, {
+          const assistantMessageId = await client.mutation(api.messages.addAssistantMessage, {
             conversationId: job.conversationId,
             content,
             channel: context.conversation.channel,
@@ -183,7 +192,17 @@ export function startAgentLoop() {
           });
 
           if (channel === "whatsapp" && context.contact?.phone) {
-            await sendWhatsAppMessage(context.contact.phone, content);
+            await client.mutation(api.delivery.enqueueOutbound, {
+              channel: "whatsapp",
+              accountId: env.WHATSAPP_ACCOUNT_ID ?? "default",
+              conversationId: job.conversationId,
+              messageId: assistantMessageId,
+              to: context.contact.phone,
+              content,
+              metadata: {
+                kind: "assistant_message",
+              },
+            });
           }
         }
 
