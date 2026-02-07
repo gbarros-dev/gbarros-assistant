@@ -6,6 +6,10 @@ This runbook is a quick smoke-test guide for the split runtime setup:
 - `whatsapp` worker owns WhatsApp socket + outbound delivery.
 - Convex remains the source of truth for queue/state.
 
+Decision reference:
+
+- See `docs/ops/runtime-topology.md` for deployment shape, role guidance, and go/no-go criteria.
+
 ## 1) Start Convex
 
 From `apps/backend`:

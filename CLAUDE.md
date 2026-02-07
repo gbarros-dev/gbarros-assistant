@@ -70,6 +70,72 @@ Key tables: `users` (synced from Clerk), `contacts` (WhatsApp whitelist), `conve
 
 `providers.tsx` wraps the app: ThemeProvider → ThemedClerkProvider (dark/light aware) → ConvexProviderWithClerk → Toaster (Sonner).
 
+### Chat UI (AI Elements)
+
+The web chat interface uses **AI Elements** — a shadcn/ui-based component library installed as source files under `apps/web/src/components/ai-elements/`. These are owned source files (not node_modules) and can be customized.
+
+#### Component Library
+
+| AI Elements Component | Location | Purpose |
+|---|---|---|
+| `conversation` | `ai-elements/conversation.tsx` | Auto-scrolling container with scroll-to-bottom button (`use-stick-to-bottom`) |
+| `message` | `ai-elements/message.tsx` | Message bubbles with role-based alignment, markdown via Streamdown |
+| `prompt-input` | `ai-elements/prompt-input.tsx` | Rich text input with Enter/Shift+Enter, file upload support |
+| `tool` | `ai-elements/tool.tsx` | Collapsible tool call display with status badges |
+| `confirmation` | `ai-elements/confirmation.tsx` | AI SDK approval flow (installed but not used — see Adapter Pattern below) |
+| `code-block` | `ai-elements/code-block.tsx` | Syntax-highlighted code blocks via Shiki |
+
+#### Adding new AI Elements components
+
+```bash
+cd apps/web
+bunx ai-elements@latest add <component-name>
+# Answer "n" to overwrite prompts for existing UI files
+bunx oxfmt --write src/components/ai-elements/
+```
+
+New AI Elements components are auto-ignored by knip (see `"ignore"` in `apps/web/package.json`).
+
+#### Adapter Pattern: Convex → AI Elements
+
+AI Elements components expect AI SDK types (`UIMessage`, `ToolUIPart`, etc.) but our data comes from **Convex queries**. The adapter hook `use-convex-messages.ts` bridges this gap:
+
+```
+Convex queries → useConvexMessages(conversationId) → { messages, isProcessing, pendingApprovals, sendMessage }
+                                                        ↓
+                                                  chat-area.tsx renders with AI Elements
+```
+
+**Key decisions:**
+- `Message from={role}` accepts `"user" | "assistant" | "system"` — matches our Convex schema directly.
+- `MessageResponse` renders markdown via Streamdown (GFM + math + mermaid + CJK). No `react-markdown` needed.
+- Tool calls use `ToolHeader type="dynamic-tool" toolName={name}` because our tools are dynamically named (not statically typed with AI SDK's `tool-${NAME}` pattern).
+- Tool approvals use a custom `ApprovalCard` with `Alert` instead of the `Confirmation` component, because our `status: "pending"|"approved"|"rejected"` model doesn't map to AI SDK's `ToolUIPart["state"]` machine.
+- Message grouping (120s threshold, `position: first|middle|last|single`) is computed in the adapter hook and applied via wrapper `<div>` spacing classes.
+
+#### Chat File Structure
+
+```
+src/components/chat/
+├── chat-area.tsx              # Main chat view — composes AI Elements
+├── use-convex-messages.ts     # Adapter hook: Convex → component-friendly shape
+└── typing-indicator.tsx       # Bounce-dot indicator (22 lines, kept as-is)
+```
+
+#### Error Handling Pattern
+
+Mutations (`sendMessage`, `resolve`) wrap calls in try/catch with:
+- `toast.error(...)` for user-facing feedback (via Sonner)
+- `logWebClientEvent(...)` for observability telemetry
+
+#### When Expanding the Chat UI
+
+- **New message types** (e.g., images, files): Add to `ChatMessage` interface in `use-convex-messages.ts`, render in the message map in `chat-area.tsx`.
+- **New tool states**: Update `ToolHeader state` prop. Valid states: `input-streaming`, `input-available`, `output-available`, `output-error`, `output-denied`, `approval-requested`, `approval-responded`.
+- **Message actions** (copy, retry, etc.): Use `MessageActions` + `MessageAction` from `ai-elements/message.tsx`.
+- **Branching/edits**: Use `MessageBranch` + `MessageBranchContent` + `MessageBranchSelector` from `ai-elements/message.tsx`.
+- **File attachments in prompt**: Use `PromptInputActionMenu` + `PromptInputActionAddAttachments` from `ai-elements/prompt-input.tsx`.
+
 ## Code Style
 
 - **Formatter**: Oxfmt — tabs (width 2), double quotes, auto-sorted imports (builtin → external → internal → relative), Tailwind class sorting via `cn`/`clsx`/`cva`/`twMerge`

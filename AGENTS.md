@@ -77,7 +77,10 @@ zenthor-assist/
 ├── apps/
 │   ├── web/
 │   │   ├── src/app/                  # App Router routes (route groups: (app), (auth))
-│   │   ├── src/components/           # UI and feature components
+│   │   ├── src/components/
+│   │   │   ├── ai-elements/          # AI Elements components (owned source, not node_modules)
+│   │   │   ├── chat/                 # Chat UI (chat-area, adapter hook, typing indicator)
+│   │   │   └── ui/                   # shadcn/ui primitives
 │   │   ├── src/hooks/
 │   │   ├── src/lib/
 │   │   └── src/proxy.ts              # Clerk route protection (Next 16 proxy)
@@ -128,6 +131,65 @@ zenthor-assist/
 - Main loop subscribes to pending jobs via `api.agent.getPendingJobs`, claims jobs, generates responses, and writes results back to Convex.
 - Web conversations use streaming placeholder updates; WhatsApp conversations send final text via Baileys.
 - Built-in tool registration starts in `apps/agent/src/agent/tools/index.ts`; provider-specific web search tooling is added in `tools/web-search.ts`.
+
+## Chat UI (AI Elements)
+
+The web chat interface (`apps/web/src/components/chat/`) uses **AI Elements**, a shadcn/ui-based library installed as source files under `apps/web/src/components/ai-elements/`. These are owned source files (not in node_modules) and can be modified.
+
+### Installed Components
+
+- `conversation.tsx` — Auto-scrolling container + scroll-to-bottom button (via `use-stick-to-bottom`)
+- `message.tsx` — Role-based message bubbles + markdown rendering via Streamdown (GFM, math, mermaid, CJK)
+- `prompt-input.tsx` — Rich text input (Enter/Shift+Enter, file upload, paste support)
+- `tool.tsx` — Collapsible tool call cards with status badges
+- `confirmation.tsx` — AI SDK approval flow (installed but unused — we use a custom ApprovalCard)
+- `code-block.tsx` — Syntax-highlighted code blocks via Shiki
+
+### Adding new AI Elements
+
+```bash
+cd apps/web
+bunx ai-elements@latest add <component-name>
+bunx oxfmt --write src/components/ai-elements/
+```
+
+Components are ignored by knip (see `apps/web/package.json` knip config).
+
+### Adapter Pattern
+
+Messages come from **Convex queries** (not AI SDK `useChat`). The adapter hook `use-convex-messages.ts` maps Convex docs to AI Elements shapes:
+
+```
+Convex queries → useConvexMessages(conversationId) → { messages, isProcessing, pendingApprovals, sendMessage }
+```
+
+Key rules:
+- `Message from={role}` matches our schema: `"user" | "assistant" | "system"`.
+- `MessageResponse` handles all markdown (replaces old `react-markdown` + `remark-gfm`).
+- Tool calls: use `ToolHeader type="dynamic-tool" toolName={name}` (our tools are dynamically named).
+- Tool approvals: custom `ApprovalCard` with `Alert` component instead of `Confirmation` (our approval model is simpler than AI SDK's state machine).
+- Message grouping (120s threshold, `position: first|middle|last|single`) computed in the adapter hook.
+
+### Chat File Structure
+
+```
+src/components/chat/
+├── chat-area.tsx              # Main chat — composes AI Elements components
+├── use-convex-messages.ts     # Adapter: Convex queries → component-friendly data
+└── typing-indicator.tsx       # Bounce-dot typing indicator
+```
+
+### Error Handling
+
+Mutations use try/catch with `toast.error()` (Sonner) + `logWebClientEvent()` (observability).
+
+### Expanding the Chat UI
+
+- **New message types**: Extend `ChatMessage` in `use-convex-messages.ts`, add rendering branch in `chat-area.tsx`.
+- **Tool states**: Use `ToolHeader state` prop (`input-streaming`, `input-available`, `output-available`, `output-error`, `output-denied`, `approval-requested`, `approval-responded`).
+- **Message actions** (copy, retry): Use `MessageActions` + `MessageAction` from `ai-elements/message.tsx`.
+- **Branching/edits**: Use `MessageBranch` + `MessageBranchContent` + `MessageBranchSelector`.
+- **File attachments**: Use `PromptInputActionMenu` + `PromptInputActionAddAttachments`.
 
 ## Environment Variables
 

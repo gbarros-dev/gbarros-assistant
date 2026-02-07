@@ -77,6 +77,7 @@ Build a production-safe multi-runtime architecture where:
 - Refactor is implemented in working tree (not yet committed in this summary context).
 - Core and WhatsApp responsibilities are now structurally separated while still sharing the same `apps/agent` workspace.
 - Plugin growth path is in place through Convex + runtime loader.
+- Canonical runtime/deployment guidance is documented in `docs/ops/runtime-topology.md`.
 
 ## Remaining Acceptance Checks (Recommended Before Merge)
 
