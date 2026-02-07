@@ -1,0 +1,3 @@
+{
+  "extends": "@zenthor-assist/config/tsconfig.base.json"
+}
