@@ -2,157 +2,234 @@
 
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
-import { useEffect, useMemo, useRef } from "react";
+import { useMutation } from "convex/react";
+import { Check, MessageSquare, ShieldAlert, X } from "lucide-react";
+import { useCallback, useState } from "react";
+import { toast } from "sonner";
 
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+} from "@/components/ai-elements/prompt-input";
+import { Tool, ToolContent, ToolHeader, ToolInput } from "@/components/ai-elements/tool";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { logWebClientEvent } from "@/lib/observability/client";
 import { cn } from "@/lib/utils";
 
-import type { MessagePosition } from "./message-bubble";
-import { MessageBubble } from "./message-bubble";
-import { MessageInput } from "./message-input";
-import { ToolApprovalCard } from "./tool-approval-card";
 import { TypingIndicator } from "./typing-indicator";
+import type { PendingApproval } from "./use-convex-messages";
+import { useConvexMessages } from "./use-convex-messages";
 
 interface ChatAreaProps {
   conversationId: Id<"conversations">;
 }
 
-const GROUP_THRESHOLD_MS = 120_000;
+function ApprovalCard({
+  approval,
+  conversationId,
+}: {
+  approval: PendingApproval;
+  conversationId: Id<"conversations">;
+}) {
+  const [resolving, setResolving] = useState<"approved" | "rejected" | null>(null);
+  const resolve = useMutation(api.toolApprovals.resolve);
 
-interface MessageWithPosition {
-  _id: string;
-  role: string;
-  content: string;
-  _creationTime: number;
-  toolCalls?: { name: string; input: unknown }[];
-  streaming?: boolean;
-  position: MessagePosition;
-}
+  const isPending = approval.status === "pending" && !resolving;
 
-function computeMessagePositions(
-  messages: {
-    _id: string;
-    role: string;
-    content: string;
-    _creationTime: number;
-    toolCalls?: { name: string; input: unknown }[];
-    streaming?: boolean;
-  }[],
-): MessageWithPosition[] {
-  return messages.map((msg, i) => {
-    if (msg.role === "system") {
-      return { ...msg, position: "single" as const };
+  async function handleResolve(decision: "approved" | "rejected") {
+    setResolving(decision);
+    try {
+      await resolve({
+        approvalId: approval._id as Id<"toolApprovals">,
+        status: decision,
+      });
+    } catch (error) {
+      toast.error("Failed to resolve tool approval");
+      logWebClientEvent({
+        event: "web.chat.tool_approval.resolve_failed",
+        level: "error",
+        payload: {
+          approvalId: approval._id,
+          conversationId,
+          decision,
+          toolName: approval.toolName,
+          error:
+            error instanceof Error
+              ? {
+                  name: error.name,
+                  message: error.message,
+                }
+              : String(error),
+        },
+      });
+      setResolving(null);
     }
+  }
 
-    const prev = i > 0 ? messages[i - 1] : null;
-    const next = i < messages.length - 1 ? messages[i + 1] : null;
+  const displayStatus = resolving ?? (approval.status !== "pending" ? approval.status : null);
 
-    const sameRoleAsPrev =
-      prev !== null &&
-      prev.role !== "system" &&
-      prev.role === msg.role &&
-      msg._creationTime - prev._creationTime < GROUP_THRESHOLD_MS;
-
-    const sameRoleAsNext =
-      next !== null &&
-      next.role !== "system" &&
-      next.role === msg.role &&
-      next._creationTime - msg._creationTime < GROUP_THRESHOLD_MS;
-
-    let position: MessagePosition;
-    if (sameRoleAsPrev && sameRoleAsNext) {
-      position = "middle";
-    } else if (sameRoleAsPrev) {
-      position = "last";
-    } else if (sameRoleAsNext) {
-      position = "first";
-    } else {
-      position = "single";
-    }
-
-    return { ...msg, position };
-  });
+  return (
+    <Alert
+      className={cn(
+        "flex flex-col gap-2",
+        isPending ? "border-amber-500/30 bg-amber-500/5" : undefined,
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <ShieldAlert
+          className={cn("size-4 shrink-0", isPending ? "text-amber-500" : "text-muted-foreground")}
+        />
+        <AlertDescription className="flex-1 truncate font-mono font-semibold">
+          {approval.toolName}
+        </AlertDescription>
+        {displayStatus === "approved" && (
+          <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+            <Check className="size-3" />
+            Approved
+          </span>
+        )}
+        {displayStatus === "rejected" && (
+          <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+            <X className="size-3" />
+            Rejected
+          </span>
+        )}
+      </div>
+      {isPending && (
+        <div className="flex gap-2">
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={!!resolving}
+            className="text-green-700 hover:bg-green-500/10 hover:text-green-700 dark:text-green-400 dark:hover:text-green-400"
+            onClick={() => handleResolve("approved")}
+          >
+            <Check />
+            Approve
+          </Button>
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={!!resolving}
+            className="text-red-700 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-400"
+            onClick={() => handleResolve("rejected")}
+          >
+            <X />
+            Reject
+          </Button>
+        </div>
+      )}
+    </Alert>
+  );
 }
 
 export function ChatArea({ conversationId }: ChatAreaProps) {
-  const messages = useQuery(api.messages.listByConversation, { conversationId });
-  const isProcessing = useQuery(api.agent.isProcessing, { conversationId });
-  const pendingApprovals = useQuery(api.toolApprovals.getPendingByConversation, {
-    conversationId,
-  });
-  const sendMessage = useMutation(api.messages.send);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const { messages, isProcessing, hasStreamingMessage, pendingApprovals, sendMessage } =
+    useConvexMessages(conversationId);
 
-  const groupedMessages = useMemo(() => {
-    if (!messages) return null;
-    return computeMessagePositions(
-      messages as {
-        _id: string;
-        role: string;
-        content: string;
-        _creationTime: number;
-        toolCalls?: { name: string; input: unknown }[];
-        streaming?: boolean;
-      }[],
-    );
-  }, [messages]);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [messages]);
-
-  const handleSend = async (content: string) => {
-    await sendMessage({
-      conversationId,
-      content,
-      channel: "web",
-    });
-  };
-
-  const hasStreamingMessage = messages?.some((msg) => msg.streaming);
+  const handleSend = useCallback(
+    async (message: { text: string }) => {
+      const trimmed = message.text.trim();
+      if (!trimmed) return;
+      await sendMessage(trimmed);
+    },
+    [sendMessage],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div ref={scrollRef} className="scrollbar-thin flex-1 overflow-y-auto p-4">
-        <div className="flex flex-col">
-          {groupedMessages?.map((msg) => (
-            <div
-              key={msg._id}
-              className={cn(
-                msg.position === "middle" || msg.position === "last" ? "mt-1" : "mt-4 first:mt-0",
-              )}
-            >
-              <MessageBubble
-                role={msg.role as "user" | "assistant" | "system"}
-                content={msg.content}
-                toolCalls={msg.toolCalls}
-                streaming={msg.streaming ?? undefined}
-                position={msg.position}
-              />
+      <Conversation>
+        <ConversationContent className="gap-0 p-4">
+          {messages === null ? null : messages.length === 0 ? (
+            <ConversationEmptyState
+              title="Start a conversation"
+              description="Send a message to begin chatting"
+              icon={<MessageSquare className="size-8" />}
+            />
+          ) : (
+            messages.map((msg) => {
+              if (msg.role === "system") return null;
+
+              return (
+                <div
+                  key={msg._id}
+                  className={cn(
+                    msg.position === "middle" || msg.position === "last"
+                      ? "mt-1"
+                      : "mt-4 first:mt-0",
+                  )}
+                >
+                  <Message from={msg.role}>
+                    <MessageContent>
+                      {msg.role === "user" ? (
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      ) : (
+                        <>
+                          {msg.content ? (
+                            <MessageResponse>{msg.content}</MessageResponse>
+                          ) : msg.streaming ? (
+                            <div className="flex items-center gap-1 py-1">
+                              <span className="bg-foreground/40 size-1.5 animate-bounce rounded-full [animation-delay:0ms]" />
+                              <span className="bg-foreground/40 size-1.5 animate-bounce rounded-full [animation-delay:150ms]" />
+                              <span className="bg-foreground/40 size-1.5 animate-bounce rounded-full [animation-delay:300ms]" />
+                            </div>
+                          ) : null}
+                          {msg.toolCalls &&
+                            msg.toolCalls.length > 0 &&
+                            msg.toolCalls.map((tc, i) => (
+                              <Tool key={`${tc.name}-${i}`}>
+                                <ToolHeader
+                                  title={tc.name}
+                                  type="dynamic-tool"
+                                  toolName={tc.name}
+                                  state="output-available"
+                                />
+                                <ToolContent>
+                                  <ToolInput input={tc.input} />
+                                </ToolContent>
+                              </Tool>
+                            ))}
+                        </>
+                      )}
+                    </MessageContent>
+                  </Message>
+                </div>
+              );
+            })
+          )}
+          {pendingApprovals.map((approval) => (
+            <div key={approval._id} className="mt-4">
+              <ApprovalCard approval={approval} conversationId={conversationId} />
             </div>
           ))}
-          {pendingApprovals &&
-            pendingApprovals.map((approval) => (
-              <div key={approval._id} className="mt-4">
-                <ToolApprovalCard
-                  approvalId={approval._id}
-                  toolName={approval.toolName}
-                  toolInput={approval.toolInput}
-                  status={approval.status}
-                />
-              </div>
-            ))}
           {isProcessing && !hasStreamingMessage && (
             <div className="mt-4">
               <TypingIndicator />
             </div>
           )}
-        </div>
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+
+      <div className="border-t p-4">
+        <PromptInput onSubmit={handleSend}>
+          <PromptInputTextarea placeholder="Type a message..." />
+          <PromptInputFooter>
+            <div />
+            <PromptInputSubmit />
+          </PromptInputFooter>
+        </PromptInput>
       </div>
-      <MessageInput onSend={handleSend} />
     </div>
   );
 }
