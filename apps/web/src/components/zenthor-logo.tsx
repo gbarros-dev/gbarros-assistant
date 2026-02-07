@@ -13,15 +13,15 @@ export function ZenthorMark({ className, ...props }: SVGProps<SVGSVGElement>) {
         d="M8 8h24L8 32h24"
         stroke="currentColor"
         strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
       />
       <path
         d="M8 8h24L8 32h24"
         stroke="currentColor"
         strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
         opacity="0.3"
         transform="translate(2, 2)"
       />
@@ -42,15 +42,15 @@ export function ZenthorHeroMark({ className, ...props }: SVGProps<SVGSVGElement>
         d="M24 24h72L24 96h72"
         stroke="currentColor"
         strokeWidth="6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
       />
       <path
         d="M24 24h72L24 96h72"
         stroke="currentColor"
         strokeWidth="6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
         opacity="0.15"
         transform="translate(6, 6)"
       />
@@ -71,15 +71,15 @@ export function ZenthorLogo({ className, ...props }: SVGProps<SVGSVGElement>) {
         d="M8 8h24L8 32h24"
         stroke="currentColor"
         strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
       />
       <path
         d="M8 8h24L8 32h24"
         stroke="currentColor"
         strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
         opacity="0.3"
         transform="translate(2, 2)"
       />
@@ -87,10 +87,10 @@ export function ZenthorLogo({ className, ...props }: SVGProps<SVGSVGElement>) {
         x="48"
         y="28"
         fill="currentColor"
-        fontFamily="var(--font-sans), sans-serif"
+        fontFamily="var(--font-space-grotesk), sans-serif"
         fontSize="20"
         fontWeight="600"
-        letterSpacing="0.02em"
+        letterSpacing="-0.02em"
       >
         zenthor
       </text>
