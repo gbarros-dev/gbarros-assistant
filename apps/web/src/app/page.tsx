@@ -40,9 +40,7 @@ export default function Home() {
       >
         <div className="flex items-center gap-2.5">
           <ZenthorMark className="text-primary size-7" />
-          <span className="text-foreground font-sans text-[15px] font-semibold tracking-tight">
-            zenthor
-          </span>
+          <span className="text-foreground text-[15px] font-semibold tracking-tight">zenthor</span>
         </div>
         <ModeToggle />
       </nav>
@@ -57,7 +55,7 @@ export default function Home() {
 
           {/* Headline */}
           <h1
-            className="animate-fade-up text-foreground text-center font-sans text-4xl leading-[1.1] font-bold tracking-tight md:text-6xl"
+            className="animate-fade-up text-foreground text-center text-4xl leading-[1.1] font-bold tracking-tight md:text-6xl"
             style={{ animationDelay: "0.3s" }}
           >
             Conversation,
@@ -67,7 +65,7 @@ export default function Home() {
 
           {/* Subtitle */}
           <p
-            className="animate-fade-up text-muted-foreground mt-5 max-w-md text-center text-base leading-relaxed md:text-lg"
+            className="animate-fade-up text-muted-foreground mt-5 max-w-md text-center text-xs leading-relaxed tracking-tight md:text-sm"
             style={{ animationDelay: "0.45s" }}
           >
             Zenthor Assist is your intelligent companion — always ready, always sharp, always
@@ -107,34 +105,34 @@ export default function Home() {
       >
         <div className="mx-auto grid max-w-3xl grid-cols-1 gap-6 sm:grid-cols-3">
           <div className="flex items-start gap-3">
-            <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-md">
+            <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-none">
               <MessageSquare className="size-4" />
             </div>
             <div>
-              <p className="text-foreground text-sm font-medium">Natural dialogue</p>
-              <p className="text-muted-foreground text-xs leading-relaxed">
+              <p className="text-foreground text-sm font-medium tracking-tight">Natural dialogue</p>
+              <p className="text-muted-foreground text-xs leading-relaxed tracking-tight">
                 Fluid conversations that feel genuinely helpful, not scripted.
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-md">
+            <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-none">
               <Zap className="size-4" />
             </div>
             <div>
-              <p className="text-foreground text-sm font-medium">Instant answers</p>
-              <p className="text-muted-foreground text-xs leading-relaxed">
+              <p className="text-foreground text-sm font-medium tracking-tight">Instant answers</p>
+              <p className="text-muted-foreground text-xs leading-relaxed tracking-tight">
                 Powered by Claude with real-time web search and tools.
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-md">
+            <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-none">
               <Sparkles className="size-4" />
             </div>
             <div>
-              <p className="text-foreground text-sm font-medium">Always improving</p>
-              <p className="text-muted-foreground text-xs leading-relaxed">
+              <p className="text-foreground text-sm font-medium tracking-tight">Always improving</p>
+              <p className="text-muted-foreground text-xs leading-relaxed tracking-tight">
                 Context-aware memory that gets sharper with every session.
               </p>
             </div>

@@ -53,7 +53,7 @@ export function MessageBubble({
       )}
       <div
         className={cn(
-          "max-w-[75%] rounded-sm px-3 py-2 text-sm",
+          "max-w-[75%] px-3 py-2 text-sm",
           isUser ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
         )}
       >
