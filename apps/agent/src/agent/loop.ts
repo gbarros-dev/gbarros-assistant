@@ -1,9 +1,17 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
+import { env } from "@zenthor-assist/env/agent";
 
 import { getConvexClient } from "../convex/client";
 import { sendWhatsAppMessage } from "../whatsapp/sender";
 import { compactMessages } from "./compact";
+import { evaluateContext } from "./context-guard";
+import { classifyError, isRetryable } from "./errors";
+import type { AgentConfig } from "./generate";
 import { generateResponse, generateResponseStreaming } from "./generate";
+import { wrapToolsWithApproval } from "./tool-approval";
+import { filterTools, getDefaultPolicy, mergeToolPolicies } from "./tool-policy";
+import { tools } from "./tools";
+import { getWebSearchTool } from "./tools/web-search";
 
 export function startAgentLoop() {
   const client = getConvexClient();
@@ -27,15 +35,28 @@ export function startAgentLoop() {
           continue;
         }
 
-        const conversationMessages = context.messages
+        const agentConfig: AgentConfig | undefined = context.agent
+          ? {
+              systemPrompt: context.agent.systemPrompt,
+              model: context.agent.model ?? undefined,
+              fallbackModel: context.agent.fallbackModel ?? undefined,
+              toolPolicy: context.agent.toolPolicy ?? undefined,
+            }
+          : undefined;
+
+        let conversationMessages = context.messages
           .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
           .map((m) => ({
             role: m.role as "user" | "assistant" | "system",
             content: m.content,
           }));
 
-        const { messages: compactedMessages, summary } =
-          await compactMessages(conversationMessages);
+        // Compact messages if needed
+        const { messages: compactedMessages, summary } = await compactMessages(
+          conversationMessages,
+          env.AI_CONTEXT_WINDOW,
+        );
+        conversationMessages = compactedMessages;
 
         if (summary) {
           await client.mutation(api.messages.addSummaryMessage, {
@@ -46,7 +67,44 @@ export function startAgentLoop() {
           console.info(`[agent] Compacted conversation ${job.conversationId}`);
         }
 
+        // Post-compaction context guard: if still over budget, truncate
+        const guard = evaluateContext(conversationMessages, env.AI_CONTEXT_WINDOW);
+        if (guard.shouldBlock) {
+          // Trim oldest messages until within budget (keep at least the last message)
+          while (
+            conversationMessages.length > 1 &&
+            evaluateContext(conversationMessages, env.AI_CONTEXT_WINDOW).shouldBlock
+          ) {
+            conversationMessages.shift();
+          }
+          console.info(
+            `[agent] Truncated conversation ${job.conversationId} to ${conversationMessages.length} messages (context guard)`,
+          );
+        }
+
+        // Build channel-aware tool policy
+        const channelPolicy = getDefaultPolicy(context.conversation.channel as "web" | "whatsapp");
+        const skillPolicies = context.skills
+          .filter((s) => s.config?.toolPolicy)
+          .map((s) => s.config!.toolPolicy!);
+        const policies = [channelPolicy, ...skillPolicies];
+        if (agentConfig?.toolPolicy) policies.push(agentConfig.toolPolicy);
+        const mergedPolicy = policies.length > 1 ? mergeToolPolicies(...policies) : channelPolicy;
+
+        const allTools = { ...tools, ...getWebSearchTool(env.AI_MODEL) };
+        const filteredTools = filterTools(allTools, mergedPolicy);
+
+        // Wrap high-risk tools with approval flow
+        const channel = context.conversation.channel as "web" | "whatsapp";
+        const approvalTools = wrapToolsWithApproval(filteredTools, {
+          jobId: job._id,
+          conversationId: job.conversationId,
+          channel,
+          phone: context.contact?.phone,
+        });
+
         const isWeb = context.conversation.channel === "web";
+        let modelUsed: string | undefined;
 
         if (isWeb) {
           const placeholderId = await client.mutation(api.messages.createPlaceholder, {
@@ -57,20 +115,27 @@ export function startAgentLoop() {
           let lastPatchTime = 0;
           const THROTTLE_MS = 200;
 
-          const response = await generateResponseStreaming(compactedMessages, context.skills, {
-            onChunk: (accumulatedText) => {
-              const now = Date.now();
-              if (now - lastPatchTime >= THROTTLE_MS) {
-                lastPatchTime = now;
-                client
-                  .mutation(api.messages.updateStreamingContent, {
-                    messageId: placeholderId,
-                    content: accumulatedText,
-                  })
-                  .catch(() => {});
-              }
+          const response = await generateResponseStreaming(
+            compactedMessages,
+            context.skills,
+            {
+              onChunk: (accumulatedText) => {
+                const now = Date.now();
+                if (now - lastPatchTime >= THROTTLE_MS) {
+                  lastPatchTime = now;
+                  client
+                    .mutation(api.messages.updateStreamingContent, {
+                      messageId: placeholderId,
+                      content: accumulatedText,
+                    })
+                    .catch(() => {});
+                }
+              },
             },
-          });
+            { toolsOverride: approvalTools, agentConfig },
+          );
+
+          modelUsed = response.modelUsed;
 
           await client.mutation(api.messages.finalizeMessage, {
             messageId: placeholderId,
@@ -78,7 +143,11 @@ export function startAgentLoop() {
             toolCalls: response.toolCalls,
           });
         } else {
-          const response = await generateResponse(compactedMessages, context.skills);
+          const response = await generateResponse(compactedMessages, context.skills, {
+            toolsOverride: approvalTools,
+            agentConfig,
+          });
+          modelUsed = response.modelUsed;
 
           await client.mutation(api.messages.addAssistantMessage, {
             conversationId: job.conversationId,
@@ -92,11 +161,32 @@ export function startAgentLoop() {
           }
         }
 
-        await client.mutation(api.agent.completeJob, { jobId: job._id });
-        console.info(`[agent] Completed job ${job._id}`);
+        await client.mutation(api.agent.completeJob, { jobId: job._id, modelUsed });
+        console.info(
+          `[agent] Completed job ${job._id}${modelUsed ? ` (model: ${modelUsed})` : ""}`,
+        );
       } catch (error) {
-        console.error(`[agent] Failed job ${job._id}:`, error);
-        await client.mutation(api.agent.failJob, { jobId: job._id }).catch(() => {});
+        const reason = classifyError(error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[agent] Failed job ${job._id} (${reason}):`, error);
+
+        if (isRetryable(reason)) {
+          const retried = await client
+            .mutation(api.agent.retryJob, { jobId: job._id })
+            .catch(() => false);
+          if (retried) {
+            console.info(`[agent] Retrying job ${job._id} (${reason})`);
+            continue;
+          }
+        }
+
+        await client
+          .mutation(api.agent.failJob, {
+            jobId: job._id,
+            errorReason: reason,
+            errorMessage: errorMessage.slice(0, 500),
+          })
+          .catch(() => {});
       }
     }
   });

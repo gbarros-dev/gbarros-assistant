@@ -7,6 +7,7 @@ export const getOrCreate = mutation({
     userId: v.optional(v.id("users")),
     contactId: v.optional(v.id("contacts")),
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
+    agentId: v.optional(v.id("agents")),
   },
   handler: async (ctx, args) => {
     if (args.channel === "web" && args.userId) {
@@ -23,6 +24,7 @@ export const getOrCreate = mutation({
         userId: args.userId,
         channel: "web",
         status: "active",
+        ...(args.agentId && { agentId: args.agentId }),
       });
     }
 
@@ -40,6 +42,7 @@ export const getOrCreate = mutation({
         contactId: args.contactId,
         channel: "whatsapp",
         status: "active",
+        ...(args.agentId && { agentId: args.agentId }),
       });
     }
 
