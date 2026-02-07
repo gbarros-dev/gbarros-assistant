@@ -15,6 +15,18 @@ const envSchema = z.object({
   WHATSAPP_PHONE: z.string().min(1).optional(),
   WHATSAPP_LEASE_TTL_MS: z.coerce.number().optional(),
   WHATSAPP_HEARTBEAT_MS: z.coerce.number().optional(),
+  AXIOM_TOKEN: z.string().min(1).optional(),
+  AXIOM_DATASET: z.string().min(1).optional(),
+  OBS_ENABLED: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value !== "false"),
+  OBS_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional().default(1),
+  OBS_LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional().default("info"),
+  OBS_INCLUDE_CONTENT: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
 });
 
 export const env = envSchema.parse(process.env);

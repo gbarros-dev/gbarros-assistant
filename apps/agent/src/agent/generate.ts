@@ -3,6 +3,7 @@ import { env } from "@zenthor-assist/env/agent";
 import type { Tool } from "ai";
 import { generateText, stepCountIs, streamText } from "ai";
 
+import { logger } from "../observability/logger";
 import { runWithFallback } from "./model-fallback";
 import { tools } from "./tools";
 import { getWebSearchTool } from "./tools/web-search";
@@ -103,8 +104,16 @@ export async function generateResponse(
     channel?: "web" | "whatsapp";
   },
 ): Promise<GenerateResult> {
+  const startedAt = Date.now();
   const primaryModel = options?.agentConfig?.model ?? options?.modelOverride ?? env.AI_MODEL;
   const fallbackModel = options?.agentConfig?.fallbackModel ?? env.AI_FALLBACK_MODEL;
+  void logger.info("agent.model.generate.started", {
+    mode: "non_streaming",
+    primaryModel,
+    hasFallbackModel: Boolean(fallbackModel),
+    messageCount: conversationMessages.length,
+    channel: options?.channel,
+  });
 
   const { result, modelUsed } = await runWithFallback({
     primaryModel,
@@ -130,6 +139,12 @@ export async function generateResponse(
     },
   });
 
+  void logger.info("agent.model.generate.completed", {
+    mode: "non_streaming",
+    modelUsed,
+    durationMs: Date.now() - startedAt,
+    channel: options?.channel,
+  });
   return { ...result, modelUsed };
 }
 
@@ -148,8 +163,16 @@ export async function generateResponseStreaming(
     channel?: "web" | "whatsapp";
   },
 ): Promise<GenerateResult> {
+  const startedAt = Date.now();
   const primaryModel = options?.agentConfig?.model ?? options?.modelOverride ?? env.AI_MODEL;
   const fallbackModel = options?.agentConfig?.fallbackModel ?? env.AI_FALLBACK_MODEL;
+  void logger.info("agent.model.generate.started", {
+    mode: "streaming",
+    primaryModel,
+    hasFallbackModel: Boolean(fallbackModel),
+    messageCount: conversationMessages.length,
+    channel: options?.channel,
+  });
 
   const { result, modelUsed } = await runWithFallback({
     primaryModel,
@@ -183,5 +206,11 @@ export async function generateResponseStreaming(
     },
   });
 
+  void logger.info("agent.model.generate.completed", {
+    mode: "streaming",
+    modelUsed,
+    durationMs: Date.now() - startedAt,
+    channel: options?.channel,
+  });
   return { ...result, modelUsed };
 }

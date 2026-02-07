@@ -2,6 +2,7 @@ import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import { env } from "@zenthor-assist/env/agent";
 
 import { getConvexClient } from "../convex/client";
+import { logger } from "../observability/logger";
 import { startWhatsApp } from "./connection";
 import { sendWhatsAppMessage } from "./sender";
 
@@ -25,12 +26,23 @@ async function acquireLease(accountId: string, ownerId: string): Promise<void> {
     });
     if (lease.acquired) {
       console.info(`[whatsapp] Lease acquired for account '${accountId}' by '${ownerId}'`);
+      void logger.info("whatsapp.lease.acquire.success", {
+        accountId,
+        ownerId,
+        expiresAt: lease.expiresAt,
+      });
       return;
     }
 
     console.info(
       `[whatsapp] Lease held by '${lease.ownerId ?? "unknown"}' for account '${accountId}', retrying...`,
     );
+    void logger.warn("whatsapp.lease.acquire.contended", {
+      accountId,
+      ownerId,
+      currentOwnerId: lease.ownerId,
+      expiresAt: lease.expiresAt,
+    });
     await sleep(3_000);
   }
 }
@@ -74,6 +86,10 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
       }
     } catch (error) {
       console.error("[whatsapp] Outbound loop error:", error);
+      void logger.exception("whatsapp.outbound.loop.error", error, {
+        accountId,
+        ownerId,
+      });
       await sleep(2_000);
     }
   }
@@ -106,10 +122,18 @@ export async function startWhatsAppRuntime(options: WhatsAppRuntimeOptions): Pro
           console.error(
             `[whatsapp] Lease heartbeat lost for account '${accountId}' (owner '${ownerId}')`,
           );
+          void logger.error("whatsapp.lease.heartbeat.lost", {
+            accountId,
+            ownerId,
+          });
         }
       })
       .catch((error) => {
         console.error("[whatsapp] Lease heartbeat error:", error);
+        void logger.exception("whatsapp.lease.heartbeat.error", error, {
+          accountId,
+          ownerId,
+        });
       });
   }, heartbeatMs);
 
@@ -119,6 +143,7 @@ export async function startWhatsAppRuntime(options: WhatsAppRuntimeOptions): Pro
         accountId,
         ownerId,
       });
+      void logger.info("whatsapp.lease.released", { accountId, ownerId });
     } catch {}
   };
 

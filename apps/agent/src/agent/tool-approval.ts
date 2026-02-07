@@ -4,6 +4,7 @@ import { env } from "@zenthor-assist/env/agent";
 import type { Tool } from "ai";
 
 import { getConvexClient } from "../convex/client";
+import { logger } from "../observability/logger";
 
 const HIGH_RISK_TOOLS: Set<string> = new Set();
 
@@ -85,6 +86,13 @@ export function wrapToolsWithApproval(
           toolInput: args,
           channel: context.channel,
         });
+        void logger.info("agent.tool.approval.requested", {
+          approvalId,
+          toolName: name,
+          conversationId: context.conversationId,
+          jobId: context.jobId,
+          channel: context.channel,
+        });
 
         if (context.channel === "whatsapp" && context.phone) {
           const prompt = `🔐 I'd like to use the tool '${name}'. Reply YES to approve or NO to reject.`;
@@ -113,15 +121,36 @@ export function wrapToolsWithApproval(
 
         if (result === "approved") {
           console.info(`[tool-approval] Tool '${name}' approved, executing`);
+          void logger.info("agent.tool.approval.approved", {
+            approvalId,
+            toolName: name,
+            conversationId: context.conversationId,
+            jobId: context.jobId,
+            channel: context.channel,
+          });
           return (originalExecute as Function).call(null, args, execOptions);
         }
 
         if (result === "timeout") {
           console.info(`[tool-approval] Tool '${name}' approval timed out`);
+          void logger.warn("agent.tool.approval.timeout", {
+            approvalId,
+            toolName: name,
+            conversationId: context.conversationId,
+            jobId: context.jobId,
+            channel: context.channel,
+          });
           return `Tool '${name}' approval timed out.`;
         }
 
         console.info(`[tool-approval] Tool '${name}' was rejected`);
+        void logger.warn("agent.tool.approval.rejected", {
+          approvalId,
+          toolName: name,
+          conversationId: context.conversationId,
+          jobId: context.jobId,
+          channel: context.channel,
+        });
         return `Tool '${name}' was rejected by the user.`;
       },
     } as Tool;

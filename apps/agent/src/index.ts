@@ -1,13 +1,19 @@
 import { startAgentLoop } from "./agent/loop";
+import { logger } from "./observability/logger";
 import { startWhatsAppRuntime } from "./whatsapp/runtime";
 
 async function main() {
-  console.info("[main] Starting zenthor-assist agent...");
+  await logger.lineInfo("[main] Starting zenthor-assist agent...");
+  void logger.info("agent.starting", {
+    role: process.env["AGENT_ROLE"] ?? "all",
+    enableWhatsApp: process.env["ENABLE_WHATSAPP"] !== "false",
+  });
 
   const requiredEnv = ["CONVEX_URL", "AI_GATEWAY_API_KEY"];
   for (const key of requiredEnv) {
     if (!process.env[key]) {
-      console.error(`[main] Missing required env var: ${key}`);
+      await logger.lineError(`[main] Missing required env var: ${key}`, { key });
+      void logger.error("agent.missing_required_env", { key });
       process.exit(1);
     }
   }
@@ -20,7 +26,8 @@ async function main() {
   }
 
   if (!enableWhatsApp) {
-    console.info("[main] WhatsApp disabled via ENABLE_WHATSAPP=false");
+    await logger.lineInfo("[main] WhatsApp disabled via ENABLE_WHATSAPP=false");
+    void logger.info("agent.whatsapp.disabled", { role });
   } else if (role === "whatsapp" || role === "all") {
     await startWhatsAppRuntime({ enableIngress: true, enableEgress: true });
   } else if (role === "whatsapp-ingress") {
@@ -29,10 +36,19 @@ async function main() {
     await startWhatsAppRuntime({ enableIngress: false, enableEgress: true });
   }
 
-  console.info(`[main] Agent is running (role: ${role})`);
+  await logger.lineInfo(`[main] Agent is running (role: ${role})`, { role, enableWhatsApp });
+  await logger.info("agent.ready", { role, enableWhatsApp });
 }
 
 main().catch((error) => {
-  console.error("[main] Fatal error:", error);
+  void logger.lineError("[main] Fatal error", {
+    error:
+      error instanceof Error
+        ? { name: error.name, message: error.message, stack: error.stack }
+        : String(error),
+  });
+  void logger.exception("agent.fatal", error, {
+    role: process.env["AGENT_ROLE"] ?? "all",
+  });
   process.exit(1);
 });

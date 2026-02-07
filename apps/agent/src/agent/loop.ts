@@ -3,6 +3,7 @@ import { env } from "@zenthor-assist/env/agent";
 import type { Tool } from "ai";
 
 import { getConvexClient } from "../convex/client";
+import { logger } from "../observability/logger";
 import { compactMessages } from "./compact";
 import { evaluateContext } from "./context-guard";
 import { classifyError, isRetryable } from "./errors";
@@ -36,20 +37,38 @@ function sanitizeForWhatsApp(text: string): string {
 
 export function startAgentLoop() {
   const client = getConvexClient();
-  console.info("[agent] Starting agent loop — subscribing to pending jobs...");
+  void logger.lineInfo("[agent] Starting agent loop — subscribing to pending jobs...");
+  void logger.info("agent.loop.started");
   syncBuiltinPluginDefinitions(client).catch((error) => {
-    console.warn("[agent] Failed to sync builtin plugin definitions:", error);
+    void logger.lineWarn("[agent] Failed to sync builtin plugin definitions", {
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : String(error),
+    });
+    void logger.exception("agent.plugins.sync.failed", error);
   });
 
   client.onUpdate(api.agent.getPendingJobs, {}, async (jobs) => {
     if (!jobs || jobs.length === 0) return;
 
     for (const job of jobs) {
+      const startedAt = Date.now();
       try {
         const claimed = await client.mutation(api.agent.claimJob, { jobId: job._id });
         if (!claimed) continue;
 
-        console.info(`[agent] Processing job ${job._id} for conversation ${job.conversationId}`);
+        void logger.lineInfo(
+          `[agent] Processing job ${job._id} for conversation ${job.conversationId}`,
+          {
+            jobId: job._id,
+            conversationId: job.conversationId,
+          },
+        );
+        void logger.info("agent.job.claimed", {
+          jobId: job._id,
+          conversationId: job.conversationId,
+        });
 
         const context = await client.query(api.agent.getConversationContext, {
           conversationId: job.conversationId,
@@ -88,7 +107,14 @@ export function startAgentLoop() {
             content: summary,
             channel: context.conversation.channel,
           });
-          console.info(`[agent] Compacted conversation ${job.conversationId}`);
+          void logger.lineInfo(`[agent] Compacted conversation ${job.conversationId}`, {
+            conversationId: job.conversationId,
+            jobId: job._id,
+          });
+          void logger.info("agent.conversation.compacted", {
+            conversationId: job.conversationId,
+            jobId: job._id,
+          });
         }
 
         // Post-compaction context guard: if still over budget, truncate
@@ -101,9 +127,19 @@ export function startAgentLoop() {
           ) {
             conversationMessages.shift();
           }
-          console.info(
+          void logger.lineInfo(
             `[agent] Truncated conversation ${job.conversationId} to ${conversationMessages.length} messages (context guard)`,
+            {
+              conversationId: job.conversationId,
+              jobId: job._id,
+              messageCount: conversationMessages.length,
+            },
           );
+          void logger.warn("agent.conversation.truncated", {
+            conversationId: job.conversationId,
+            jobId: job._id,
+            messageCount: conversationMessages.length,
+          });
         }
 
         const channel = context.conversation.channel as "web" | "whatsapp";
@@ -207,20 +243,57 @@ export function startAgentLoop() {
         }
 
         await client.mutation(api.agent.completeJob, { jobId: job._id, modelUsed });
-        console.info(
+        void logger.lineInfo(
           `[agent] Completed job ${job._id}${modelUsed ? ` (model: ${modelUsed})` : ""}`,
+          {
+            jobId: job._id,
+            conversationId: job.conversationId,
+            modelUsed,
+            durationMs: Date.now() - startedAt,
+          },
         );
+        void logger.info("agent.job.completed", {
+          jobId: job._id,
+          conversationId: job.conversationId,
+          channel,
+          modelUsed,
+          durationMs: Date.now() - startedAt,
+        });
       } catch (error) {
         const reason = classifyError(error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`[agent] Failed job ${job._id} (${reason}):`, error);
+        void logger.lineError(`[agent] Failed job ${job._id} (${reason})`, {
+          jobId: job._id,
+          conversationId: job.conversationId,
+          reason,
+          error:
+            error instanceof Error
+              ? { name: error.name, message: error.message, stack: error.stack }
+              : String(error),
+        });
+        void logger.exception("agent.job.failed", error, {
+          jobId: job._id,
+          conversationId: job.conversationId,
+          reason,
+          errorMessage,
+          durationMs: Date.now() - startedAt,
+        });
 
         if (isRetryable(reason)) {
           const retried = await client
             .mutation(api.agent.retryJob, { jobId: job._id })
             .catch(() => false);
           if (retried) {
-            console.info(`[agent] Retrying job ${job._id} (${reason})`);
+            void logger.lineInfo(`[agent] Retrying job ${job._id} (${reason})`, {
+              jobId: job._id,
+              conversationId: job.conversationId,
+              reason,
+            });
+            void logger.warn("agent.job.retried", {
+              jobId: job._id,
+              conversationId: job.conversationId,
+              reason,
+            });
             continue;
           }
         }

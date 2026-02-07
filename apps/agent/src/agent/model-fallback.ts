@@ -1,3 +1,4 @@
+import { logger } from "../observability/logger";
 import { classifyError } from "./errors";
 import { withRetry } from "./retry";
 
@@ -29,6 +30,11 @@ export async function runWithFallback<T>(params: FallbackParams<T>): Promise<Fal
     console.info(
       `[fallback] Primary model ${params.primaryModel} failed (${reason}), trying fallback ${params.fallbackModel}`,
     );
+    void logger.warn("agent.model.fallback.used", {
+      primaryModel: params.primaryModel,
+      fallbackModel: params.fallbackModel,
+      reason,
+    });
 
     const result = await withRetry(() => params.run(params.fallbackModel!));
     return { result, modelUsed: params.fallbackModel };

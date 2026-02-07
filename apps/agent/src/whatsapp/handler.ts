@@ -2,6 +2,7 @@ import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { WAMessage } from "baileys";
 
 import { getConvexClient } from "../convex/client";
+import { logger } from "../observability/logger";
 
 export async function handleIncomingMessage(message: WAMessage) {
   const client = getConvexClient();
@@ -15,6 +16,11 @@ export async function handleIncomingMessage(message: WAMessage) {
 
   const phone = jid.replace("@s.whatsapp.net", "");
   console.info(`[whatsapp] Incoming from ${phone}: ${text.substring(0, 50)}...`);
+  void logger.info("whatsapp.inbound.received", {
+    phone,
+    jid,
+    messageLength: text.length,
+  });
 
   let contact = await client.query(api.contacts.getByPhone, { phone });
 
@@ -29,6 +35,7 @@ export async function handleIncomingMessage(message: WAMessage) {
 
   if (!contact || !contact.isAllowed) {
     console.info(`[whatsapp] Ignoring message from non-allowed contact: ${phone}`);
+    void logger.warn("whatsapp.inbound.ignored_not_allowed", { phone });
     return;
   }
 
@@ -56,6 +63,12 @@ export async function handleIncomingMessage(message: WAMessage) {
       console.info(
         `[whatsapp] Tool approval ${status} by ${phone} for approval ${pendingApprovals[0]!._id}`,
       );
+      void logger.info("agent.tool.approval.resolved_whatsapp", {
+        approvalId: pendingApprovals[0]!._id,
+        status,
+        phone,
+        conversationId,
+      });
       return;
     }
   }
@@ -67,4 +80,8 @@ export async function handleIncomingMessage(message: WAMessage) {
   });
 
   console.info(`[whatsapp] Queued message from ${phone} for processing`);
+  void logger.info("whatsapp.inbound.queued", {
+    phone,
+    conversationId,
+  });
 }
