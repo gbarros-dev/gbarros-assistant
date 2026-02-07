@@ -2,7 +2,15 @@
 
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
-import { Archive, ArrowLeft, LayoutDashboard, MessageSquare, Plus, Sparkles } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  LayoutDashboard,
+  MessageCircle,
+  MessageSquare,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -29,20 +37,22 @@ import { NavUser } from "./nav-user";
 
 type SidebarMode = "nav" | "chats";
 
+function getSidebarModeFromPath(pathname: string): SidebarMode {
+  return pathname.startsWith("/chat") ? "chats" : "nav";
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const router = useRouter();
   const { userId } = useAppContext();
-  const [mode, setMode] = useState<SidebarMode>("nav");
+  const [mode, setMode] = useState<SidebarMode>(() => getSidebarModeFromPath(pathname));
 
   const conversations = useQuery(api.conversations.listRecentWithLastMessage, { userId });
   const createConversation = useMutation(api.conversations.create);
   const archiveConversation = useMutation(api.conversations.archive);
 
   useEffect(() => {
-    if (pathname === "/dashboard") {
-      setMode("nav");
-    }
+    setMode(getSidebarModeFromPath(pathname));
   }, [pathname]);
 
   async function handleNewChat() {
@@ -127,11 +137,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <SidebarMenu className="gap-2">
                 {conversations?.map((conv) => {
                   const isActive = pathname === `/chat/${conv._id}`;
+                  const isWhatsAppConversation = conv.channel === "whatsapp";
                   return (
                     <SidebarMenuItem key={conv._id}>
-                      <SidebarMenuButton asChild isActive={isActive} tooltip={conv.title || "Chat"}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={
+                          isWhatsAppConversation
+                            ? `${conv.title || "Chat"} (WhatsApp)`
+                            : conv.title || "Chat"
+                        }
+                      >
                         <Link href={`/chat/${conv._id}` as "/"}>
+                          {isWhatsAppConversation && (
+                            <MessageCircle className="size-4 text-emerald-600 dark:text-emerald-400" />
+                          )}
                           <span className="truncate">{conv.title || "Chat"}</span>
+                          {isWhatsAppConversation && (
+                            <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                              WA
+                            </span>
+                          )}
                         </Link>
                       </SidebarMenuButton>
                       {conv.channel === "web" && (

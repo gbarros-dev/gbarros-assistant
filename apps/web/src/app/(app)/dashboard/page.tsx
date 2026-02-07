@@ -2,7 +2,7 @@
 
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
-import { MessageSquare, Plus } from "lucide-react";
+import { MessageCircle, MessageSquare, Plus } from "lucide-react";
 import Link from "next/link";
 
 import Loader from "@/components/loader";
@@ -79,9 +79,20 @@ export default function Dashboard() {
                   href={`/chat/${conv._id}` as "/"}
                   className="hover:bg-muted/50 flex items-center gap-3 px-4 py-3 transition-colors"
                 >
-                  <MessageSquare className="text-muted-foreground size-4 shrink-0" />
+                  {conv.channel === "whatsapp" ? (
+                    <MessageCircle className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <MessageSquare className="text-muted-foreground size-4 shrink-0" />
+                  )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{conv.title || "Chat"}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium">{conv.title || "Chat"}</p>
+                      {conv.channel === "whatsapp" && (
+                        <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                          WhatsApp
+                        </span>
+                      )}
+                    </div>
                     {conv.lastMessage && (
                       <p className="text-muted-foreground truncate text-xs">
                         {conv.lastMessage.role === "assistant" ? "Assistant: " : ""}
