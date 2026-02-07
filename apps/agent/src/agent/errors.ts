@@ -1,4 +1,4 @@
-export type FailoverReason =
+type FailoverReason =
   | "auth"
   | "billing"
   | "rate_limit"

@@ -19,7 +19,7 @@ const pluginManifestSchema = z.object({
   description: z.string().optional(),
 });
 
-export type PluginManifestValidation =
+type PluginManifestValidation =
   | { success: true; data: z.infer<typeof pluginManifestSchema> }
   | { success: false; errors: z.ZodIssue[] };
 

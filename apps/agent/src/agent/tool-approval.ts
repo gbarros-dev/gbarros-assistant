@@ -11,7 +11,7 @@ const HIGH_RISK_TOOLS: Set<string> = new Set();
 const POLL_INTERVAL_MS = 1_000;
 const APPROVAL_TIMEOUT_MS = 5 * 60 * 1_000;
 
-export interface ApprovalContext {
+interface ApprovalContext {
   jobId: string;
   conversationId: string;
   channel: "web" | "whatsapp";
