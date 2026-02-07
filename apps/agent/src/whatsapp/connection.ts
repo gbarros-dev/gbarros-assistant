@@ -2,11 +2,13 @@ import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  useMultiFileAuthState as loadAuthState,
 } from "baileys";
 
-import { getConvexAuthState } from "./convex-auth-state";
 import { handleIncomingMessage } from "./handler";
 import { setWhatsAppSocket } from "./sender";
+
+const AUTH_DIR = ".whatsapp-auth";
 
 const logger = {
   level: "warn",
@@ -28,7 +30,7 @@ export async function startWhatsApp() {
   const { version } = await fetchLatestBaileysVersion();
   console.info(`[whatsapp] Using Baileys version ${version.join(".")}`);
 
-  const { state, saveCreds } = await getConvexAuthState();
+  const { state, saveCreds } = await loadAuthState(AUTH_DIR);
 
   const sock = makeWASocket({
     version,
@@ -38,6 +40,9 @@ export async function startWhatsApp() {
     },
     printQRInTerminal: true,
     generateHighQualityLinkPreview: false,
+    syncFullHistory: false,
+    markOnlineOnConnect: false,
+    browser: ["zenthor-assist", "cli", "1.0.0"],
   });
 
   setWhatsAppSocket(sock);

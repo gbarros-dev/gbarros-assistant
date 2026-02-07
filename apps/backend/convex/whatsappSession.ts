@@ -52,3 +52,14 @@ export const getAll = query({
     return await ctx.db.query("whatsappSession").collect();
   },
 });
+
+export const clearAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("whatsappSession").collect();
+    for (const doc of all) {
+      await ctx.db.delete(doc._id);
+    }
+    return all.length;
+  },
+});

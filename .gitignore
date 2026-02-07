@@ -46,6 +46,9 @@ coverage
 # Playwright MCP
 .playwright-mcp
 
+# WhatsApp auth state
+.whatsapp-auth
+
 # Misc
 *.tgz
 .cache
