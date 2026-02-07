@@ -6,44 +6,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 bun install                # Install all dependencies
-bun run dev                # Start all apps (backend + web + agent) via Turbo
-bun run build              # Build all apps
+bun run build              # Build all apps via Turborepo
 bun run static-analysis    # Run all checks: lint, format, typecheck, knip (dead code)
 bun run check              # Lint + format check only
 bun run check:fix          # Auto-fix lint + format
 bun run typecheck          # TypeScript check across all workspaces
 bun run knip               # Dead code detection
 
-# Per-app dev
+# Dev servers (run per-workspace — there is no root `dev` script)
 cd apps/backend && bun run dev       # Convex dev server
-cd apps/backend && bun run dev:setup # Initial Convex project setup
-cd apps/web && bun run dev           # Next.js dev server (http://localhost:3001)
+cd apps/backend && bun run dev:setup # Initial Convex project bootstrap
+cd apps/web && bun run dev           # Next.js dev server (port 3000 by default)
 cd apps/agent && bun run dev         # Agent with --watch
 
 # Add shadcn/ui components (from apps/web)
 cd apps/web && bunx shadcn@latest add <component>
 ```
 
+### Validation Strategy
+
+- Single-workspace changes: run `bun run lint`, `bun run format:check`, `bun run typecheck` inside that workspace.
+- Cross-workspace changes: run `bun run check`, `bun run typecheck`, `bun run knip` from the repo root (or `bun run static-analysis` for a full pass).
+
 ## Architecture
 
-This is a **Bun monorepo** (workspaces in `apps/*` and `packages/*`) using **Turborepo** for task orchestration.
+**Bun monorepo** (workspaces in `apps/*` and `packages/*`) with **Turborepo** for task orchestration.
 
 ### Apps
 
+- **`apps/web`** — Next.js 16 + React 19 + shadcn/ui + TailwindCSS v4 + React Compiler. Route protection via Clerk middleware in `src/proxy.ts`. Protected routes: `/chat(.*)`, `/dashboard(.*)`, `/skills(.*)`. Route groups: `(app)` for authenticated content, `(auth)` for sign-in/sign-up.
+- **`apps/backend`** — Convex backend. Schema in `convex/schema.ts`, functions in `convex/*.ts`. Types auto-generated in `convex/_generated/` (do not edit). Clerk webhook at `/clerk/webhook` via `convex/http.ts`.
 - **`apps/agent`** — Bun CLI process that subscribes to Convex for pending agent jobs, generates AI responses via Vercel AI SDK (`ai` + `@ai-sdk/gateway`), and optionally sends replies over WhatsApp (Baileys). Entry point: `src/index.ts`. Deployable via `Dockerfile.agent`.
-- **`apps/backend`** — Convex backend. Database schema in `convex/schema.ts`, server functions in `convex/*.ts`. Types auto-generated in `convex/_generated/`. Clerk webhook handler in `convex/clerk/`.
-- **`apps/web`** — Next.js 16 app with Clerk auth and Convex real-time subscriptions. Uses React 19, shadcn/ui, TailwindCSS v4, and React Compiler. Route protection is handled in `src/proxy.ts` (Next.js 16 replaces `middleware.ts` with `proxy.ts`). Protected routes: `/chat`, `/dashboard`.
 
 ### Packages
 
-- **`packages/config`** — Shared `tsconfig.base.json` (strict mode, `noUncheckedIndexedAccess`, ESNext target).
+- **`packages/config`** — Shared `tsconfig.base.json` (strict mode, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, ESNext target).
 - **`packages/env`** — Zod-validated environment schemas. Exports `./web` (t3-env) and `./agent`.
+
+### Import Aliases
+
+- Web: `@/*` → `apps/web/src/*`
+- Cross-workspace: `@zenthor-assist/backend/convex/_generated/*`, `@zenthor-assist/env/web`, `@zenthor-assist/env/agent`
+- Agent: uses relative imports (no `@/*` alias).
 
 ### Data Flow
 
 1. User sends message (web UI or WhatsApp) → `api.messages.send` mutation creates message + `agentQueue` job
 2. Agent subscribes via `client.onUpdate(api.agent.getPendingJobs)` → claims job → fetches conversation context
-3. `generateResponse()` calls AI model with tools and conversation history → stores assistant message
+3. `generateResponse()` calls AI model with tools and conversation history → stores assistant message (with streaming placeholder updates for web)
 4. Web UI receives update in real-time via Convex subscription; WhatsApp replies sent via Baileys
 
 ### Agent Tool System
@@ -54,30 +64,25 @@ Web search is handled separately via `getWebSearchTool()` in `tools/web-search.t
 
 ### Database Schema (Convex)
 
-Key tables and relationships:
+Key tables: `users` (synced from Clerk), `contacts` (WhatsApp whitelist), `conversations` (channel: `whatsapp` | `web`), `messages` (role, content, optional toolCalls, streaming flag), `skills` (extensibility, schema-ready), `agentQueue` (job lifecycle: `pending` → `processing` → `completed`/`failed`), `whatsappSession`.
 
-- **users** — synced from Clerk via webhook, indexed by `externalId` and `email`
-- **contacts** — WhatsApp contacts with `isAllowed` whitelist flag, indexed by `phone`
-- **conversations** — channel (`whatsapp` | `web`), linked to either `userId` or `contactId`
-- **messages** — belongs to conversation, stores `role`, `content`, optional `toolCalls`
-- **agentQueue** — job queue with status lifecycle: `pending` → `processing` → `completed`/`failed`
-- **skills** — extensibility table (schema-ready, not yet fully wired)
+### Web Providers Stack
+
+`providers.tsx` wraps the app: ThemeProvider → ThemedClerkProvider (dark/light aware) → ConvexProviderWithClerk → Toaster (Sonner).
 
 ## Code Style
 
-- **Formatter**: Oxfmt — tabs, double quotes, auto-sorted imports, Tailwind class sorting
+- **Formatter**: Oxfmt — tabs (width 2), double quotes, auto-sorted imports (builtin → external → internal → relative), Tailwind class sorting via `cn`/`clsx`/`cva`/`twMerge`
 - **Linter**: Oxlint — plugins: unicorn, typescript, oxc, react, react-hooks
-- **Key lint rules**: `no-explicit-any` (error), `consistent-type-imports` (error), `eqeqeq` (error), `no-console` (warn, allows info/warn/error/debug)
+- **Key rules**: `no-explicit-any` (error), `consistent-type-imports` (error), `eqeqeq` (error), `no-console` (warn, allows info/warn/error/debug)
 - **Unused vars**: Prefix with `_` to ignore (pattern: `^_`)
 - **File naming**: kebab-case (e.g., `chat-area.tsx`, `nav-conversations.tsx`)
 - **Convex functions**: Use `query()`, `mutation()`, `internalMutation()` from `convex/server`. Types come from `convex/_generated/`.
 
 ## Environment Variables
 
-Agent requires `CONVEX_URL` and `AI_GATEWAY_API_KEY` (Vercel AI Gateway). `AI_MODEL` defaults to `anthropic/claude-sonnet-4-20250514` and accepts any `provider/model` string. Optional: `AGENT_SECRET`, `ENABLE_WHATSAPP`.
+Use `.env.local` files per app (never committed). Run `bun run dev:setup` in `apps/backend` to configure Convex initially. Convex dashboard env for deployed backend functions.
 
-Web requires `NEXT_PUBLIC_CONVEX_URL` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`.
-
-Backend requires `CLERK_JWT_ISSUER_DOMAIN` and `CLERK_WEBHOOK_SECRET` for auth.
-
-Use `.env.local` files per app (never committed). Run `bun run dev:setup` in `apps/backend` to configure Convex initially.
+- **Agent**: `CONVEX_URL`, `AI_GATEWAY_API_KEY` (required). `AI_MODEL` defaults to `anthropic/claude-sonnet-4-20250514` (accepts `provider/model`). Optional: `AGENT_SECRET`, `ENABLE_WHATSAPP`.
+- **Web**: `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`.
+- **Backend**: `CLERK_JWT_ISSUER_DOMAIN`, `CLERK_WEBHOOK_SECRET`, `CLERK_SECRET_KEY`.

@@ -1,207 +1,210 @@
 # Agent Guidelines for zenthor-assist
 
-## Repository Overview
+## Repository Snapshot
 
-Monorepo using Bun + Turborepo with Next.js frontend, Convex backend, and Bun-based agent runtime. Stack: TypeScript, React 19, TailwindCSS v4, shadcn/ui, Oxlint/Oxfmt.
+Verified against this repository on 2026-02-07.
 
-## Build, Test, and Development Commands
+- Monorepo: Bun workspaces + Turborepo
+- Apps:
+  - `apps/web` (`@zenthor-assist/web`) - Next.js 16 + React 19 + TailwindCSS v4 + shadcn/ui
+  - `apps/backend` (`@zenthor-assist/backend`) - Convex backend
+  - `apps/agent` (`@zenthor-assist/agent`) - Bun agent runtime (AI SDK + optional WhatsApp via Baileys)
+- Packages:
+  - `packages/config` - shared TypeScript base config
+  - `packages/env` - typed env validators for web/agent
+- Tooling: Oxlint, Oxfmt, TypeScript, Knip
 
-| Command                    | Scope    | Description                              |
-| -------------------------- | -------- | ---------------------------------------- |
-| `bun install`              | Root     | Install workspace dependencies           |
-| `bun run build`            | Root     | Turborepo build across all apps/packages |
-| `bun run dev`              | Root     | Start all apps in dev mode (via turbo)   |
-| `bun run typecheck`        | Root     | TypeScript check via Turbo               |
-| `bun run lint`             | Root/App | Run Oxlint                               |
-| `bun run lint:fix`         | Root/App | Run Oxlint with auto-fix                 |
-| `bun run format`           | Root/App | Run Oxfmt --write                        |
-| `bun run format:check`     | Root/App | Run Oxfmt --check                        |
-| `bun run check`            | Root     | Lint + format check combined             |
-| `bun run check:fix`        | Root     | Lint fix + format write combined         |
-| `bun run knip`             | Root/App | Find unused exports/dependencies         |
-| `bun run knip:fix`         | Root/App | Auto-fix knip issues                     |
-| `bun run clean`            | Root     | Remove build artifacts (destructive)     |
-| `bun run clean:workspaces` | Root     | Clean all workspaces                     |
+## Core Engineering Practices
 
-### App-Specific Commands
+- Prefer small, focused changes over broad refactors.
+- Keep functions small and readable; avoid unnecessary abstraction.
+- Ensure error handling is explicit and actionable.
+- Favor clear naming and consistent style across the codebase.
+- Write code that is easy to test and easy to reason about.
 
-| App     | Dev Command                            | Notes                        |
-| ------- | -------------------------------------- | ---------------------------- |
-| web     | `cd apps/web && bun run dev`           | Next.js on port 3001         |
-| backend | `cd apps/backend && bun run dev`       | Convex dev server            |
-| backend | `cd apps/backend && bun run dev:setup` | Bootstrap new Convex project |
-| agent   | `cd apps/agent && bun run dev`         | Bun watch mode               |
+## Command Reference (Verified)
 
-### Testing
+### Root commands
 
-No dedicated test runner configured. Use `bun run typecheck` and `bun run check` for validation. If adding tests:
+| Command                    | Description |
+| -------------------------- | ----------- |
+| `bun install`              | Install dependencies for all workspaces |
+| `bun run build`            | Run Turborepo build pipeline |
+| `bun run lint`             | Oxlint at repo root |
+| `bun run lint:fix`         | Oxlint with autofix |
+| `bun run format`           | Oxfmt write mode |
+| `bun run format:check`     | Oxfmt check mode |
+| `bun run check`            | `oxlint && oxfmt --check` |
+| `bun run check:fix`        | `oxlint --fix && oxfmt --write` |
+| `bun run typecheck`        | `turbo run typecheck` |
+| `bun run knip`             | `turbo run knip --continue` |
+| `bun run knip:fix`         | `turbo run knip:fix --continue` |
+| `bun run static-analysis`  | lint + format check + typecheck + knip |
+| `bun run clean`            | Destructive cleanup of root artifacts |
+| `bun run clean:workspaces` | Run workspace `clean` scripts |
 
-- Co-locate test files with source (`*.test.ts` or `*.test.tsx`)
-- Consider using Bun's built-in test runner: `bun test`
-- Run single test file: `bun test path/to/file.test.ts`
+Important:
+- There is currently no root `dev` script in `package.json`.
+- `turbo run dev` is not configured (`dev` task missing in `turbo.json`).
+- Run dev servers per workspace instead.
+
+### Workspace dev commands
+
+| Workspace | Command | Notes |
+| --------- | ------- | ----- |
+| backend | `cd apps/backend && bun run dev` | Starts Convex dev server |
+| backend | `cd apps/backend && bun run dev:setup` | Initial Convex bootstrap/configure |
+| web | `cd apps/web && bun run dev` | Next.js dev server (default port 3000 unless `PORT` is set) |
+| agent | `cd apps/agent && bun run dev` | Bun watch mode for the agent runtime |
+
+## Validation Expectations
+
+- For docs-only changes, no runtime checks are required.
+- For code changes in one workspace, prefer targeted checks in that workspace:
+  - `bun run lint`
+  - `bun run format:check`
+  - `bun run typecheck`
+- For cross-workspace changes, run root checks:
+  - `bun run check`
+  - `bun run typecheck`
+  - `bun run knip` (or `bun run static-analysis` for full pass)
 
 ## Project Structure
 
-```
+```txt
 zenthor-assist/
 ├── apps/
-│   ├── web/              # Next.js frontend (port 3001)
-│   │   ├── src/components/ui/   # shadcn/ui components
-│   │   ├── src/app/             # Next.js app router
-│   │   └── src/lib/             # Utilities (cn, etc.)
-│   ├── backend/          # Convex backend
-│   │   └── convex/       # Convex functions, schema, generated types
-│   └── agent/            # Bun-based agent runtime
-│       └── src/          # Agent loop, WhatsApp connection
+│   ├── web/
+│   │   ├── src/app/                  # App Router routes (route groups: (app), (auth))
+│   │   ├── src/components/           # UI and feature components
+│   │   ├── src/hooks/
+│   │   ├── src/lib/
+│   │   └── src/proxy.ts              # Clerk route protection (Next 16 proxy)
+│   ├── backend/
+│   │   └── convex/
+│   │       ├── schema.ts             # Data model
+│   │       ├── http.ts               # Convex HTTP router
+│   │       ├── clerk/                # Clerk webhook + sync handlers
+│   │       └── _generated/           # Generated Convex types (do not edit)
+│   └── agent/
+│       └── src/
+│           ├── agent/                # Agent loop + generation + tools
+│           ├── convex/               # Convex client wiring
+│           └── whatsapp/             # Baileys integration
 ├── packages/
-│   ├── config/           # Shared tsconfig.base.json
-│   └── env/              # Environment validation, shared env helpers
+│   ├── config/                       # Shared tsconfig.base.json
+│   └── env/                          # Typed env schemas (`./web`, `./agent`)
+├── turbo.json
+├── .oxlintrc.json
+└── .oxfmtrc.json
 ```
 
-## Code Style Guidelines
+## Architecture Notes
 
-### TypeScript
+### Web (`apps/web`)
 
-- Strict mode enabled with additional checks:
+- Next.js 16 App Router with `typedRoutes: true` and `reactCompiler: true` (`apps/web/next.config.ts`).
+- Global providers are in `apps/web/src/components/providers.tsx`:
+  - Clerk auth context
+  - Convex React client
+  - Theme provider + Sonner toaster
+- Protected routes are enforced in `apps/web/src/proxy.ts` for:
+  - `/chat(.*)`
+  - `/dashboard(.*)`
+  - `/skills(.*)`
+
+### Backend (`apps/backend/convex`)
+
+- Schema is defined in `apps/backend/convex/schema.ts`.
+- Core tables:
+  - `users`, `contacts`, `conversations`, `messages`, `skills`, `whatsappSession`, `agentQueue`
+- Clerk webhook endpoint is mounted at `/clerk/webhook` via `apps/backend/convex/http.ts`.
+- Convex-generated files are under `apps/backend/convex/_generated` and should not be manually edited.
+
+### Agent (`apps/agent`)
+
+- Entry point: `apps/agent/src/index.ts`.
+- Main loop subscribes to pending jobs via `api.agent.getPendingJobs`, claims jobs, generates responses, and writes results back to Convex.
+- Web conversations use streaming placeholder updates; WhatsApp conversations send final text via Baileys.
+- Built-in tool registration starts in `apps/agent/src/agent/tools/index.ts`; provider-specific web search tooling is added in `tools/web-search.ts`.
+
+## Environment Variables
+
+Use `.env.local` files per app (gitignored) and Convex dashboard env for deployed Convex functions.
+
+### Web env (`@zenthor-assist/env/web`)
+
+Required:
+- `NEXT_PUBLIC_CONVEX_URL`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+
+### Agent env (`@zenthor-assist/env/agent`)
+
+Required:
+- `CONVEX_URL`
+- `AI_GATEWAY_API_KEY`
+
+Optional:
+- `AI_MODEL` (defaults to `anthropic/claude-sonnet-4-20250514`)
+- `AGENT_SECRET`
+- `ENABLE_WHATSAPP` (`false` disables WhatsApp startup)
+
+### Backend/Convex env (read directly in Convex functions)
+
+Commonly required by current code:
+- `CLERK_JWT_ISSUER_DOMAIN` (`auth.config.ts`)
+- `CLERK_WEBHOOK_SECRET` (`clerk/http.ts`)
+- `CLERK_SECRET_KEY` (`clerk/sync.ts`)
+
+## TypeScript and Style Rules
+
+- Base TS config (`packages/config/tsconfig.base.json`) enforces:
+  - `strict: true`
   - `noUncheckedIndexedAccess: true`
   - `noUnusedLocals: true`
   - `noUnusedParameters: true`
   - `noFallthroughCasesInSwitch: true`
   - `verbatimModuleSyntax: true`
-- **Never** use `any` - disallowed by lint (`typescript/no-explicit-any: error`)
-- Use explicit types; prefer `as const` over type annotations where applicable
-- Prefer `type` imports: `import type { Foo } from "..."` (enforced)
-- Unused parameters must be prefixed with `_`
+- Lint:
+  - `typescript/no-explicit-any`: error
+  - `typescript/consistent-type-imports`: error
+  - `eqeqeq`: error
+  - `react-hooks/rules-of-hooks`: error
+  - Unused vars/args must use `_` prefix to be ignored
+- Formatting:
+  - Tabs, width 2, double quotes, sorted imports (Oxfmt)
+  - Tailwind classes are formatter-aware
 
-### Formatting
+## Import and Alias Conventions
 
-- **Oxfmt** handles all formatting (tab indentation, width 2, double quotes)
-- Import ordering is auto-sorted by Oxfmt - do not manually organize
-- Never use semicolons (handled by formatter)
-- Run `bun run format` before committing
+- Web alias:
+  - `@/*` -> `apps/web/src/*`
+- Shared package imports:
+  - `@zenthor-assist/backend/convex/_generated/*`
+  - `@zenthor-assist/env/web`
+  - `@zenthor-assist/env/agent`
+- Agent code currently uses relative imports (no local `@/*` alias configured).
 
-### Naming Conventions
+## Generated and Sensitive Files
 
-| Type             | Convention              | Example                |
-| ---------------- | ----------------------- | ---------------------- |
-| Files            | kebab-case              | `chat-layout.tsx`      |
-| Components       | PascalCase              | `function Button() {}` |
-| Hooks            | camelCase, use\* prefix | `useConversation`      |
-| Utils            | camelCase               | `cn`, `formatDate`     |
-| Types/Interfaces | PascalCase              | `type UserProps = {}`  |
-| Constants        | SCREAMING_SNAKE_CASE    | `API_ENDPOINT`         |
+- Do not edit generated outputs directly:
+  - `apps/backend/convex/_generated/**`
+  - `.next/**`, `dist/**`, `.turbo/**`
+- Do not commit secrets:
+  - `.env*`, `.env*.local` are gitignored
 
-### Imports
+## Testing Guidance
 
-```typescript
-// Good - type imports explicit
-import type { ReactNode } from "react";
-import { useState } from "react";
-import { cn } from "@/lib/utils";
+- There is no dedicated test suite currently in this repo.
+- If adding tests:
+  - Co-locate as `*.test.ts` or `*.test.tsx`
+  - Use Bun test runner (`bun test`)
+  - Prefer targeted runs over broad suites
 
-// Good - workspace imports
-import { schema } from "@zenthor-assist/backend";
-import { env } from "@zenthor-assist/env";
-```
+## PR and Collaboration Guidelines
 
-### Error Handling
-
-```typescript
-// Console logging - use appropriate levels
-console.info("[context] Informational message");
-console.error("[context] Error message:", error);
-
-// Top-level errors
-process.exit(1); // For fatal initialization errors
-
-// Async errors
-try {
-  await riskyOperation();
-} catch (error) {
-  console.error("[context] Operation failed:", error);
-  // Continue or re-throw based on severity
-}
-```
-
-### React Components (shadcn/ui pattern)
-
-```typescript
-import { cva, type VariantProps } from "class-variance-authority";
-import * as React from "react";
-import { cn } from "@/lib/utils";
-
-const componentVariants = cva("base-classes", {
-  variants: {
-    variant: { default: "..." },
-    size: { default: "..." },
-  },
-  defaultVariants: {
-    variant: "default",
-    size: "default",
-  },
-});
-
-function Component({
-  className,
-  variant = "default",
-  size = "default",
-  ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof componentVariants>) {
-  return (
-    <div
-      className={cn(componentVariants({ variant, size, className }))}
-      {...props}
-    />
-  );
-}
-```
-
-### Convex Functions
-
-```typescript
-import { query } from "./_generated/server";
-import { v } from "convex/values";
-
-export const myQuery = query({
-  args: { id: v.id("tableName") },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
-  },
-});
-```
-
-## Lint Rules (Oxlint)
-
-Key enforced rules:
-
-- `no-unused-vars` - Prefix unused with `_`
-- `eqeqeq` - Always use `===` and `!==`
-- `no-console` - Warns on bare console (allows info/warn/error/debug)
-- `typescript/consistent-type-imports` - Separate type imports
-- `react-hooks/rules-of-hooks` - Hook rules enforced
-- `react-hooks/exhaustive-deps` - Warn on missing deps
-
-Ignored patterns: `node_modules`, `dist`, `_generated`, `.next`, `*.d.ts`
-
-## Environment & Security
-
-- Secrets live in `apps/*/.env.local` (gitignored)
-- Never commit credentials to repo
-- Use `@zenthor-assist/env` for shared environment validation
-- Global env vars defined in `turbo.json`
-
-## Pull Request Guidelines
-
-- Use imperative mood ("Add feature", not "Added feature")
-- Keep commits atomic and focused
-- Include screenshots for UI changes
-- Run `bun run check` before opening PR
-
-## Useful Aliases
-
-| Workspace | Import Alias     | Path                 |
-| --------- | ---------------- | -------------------- |
-| web       | `@/*`            | `./src/*`            |
-| web       | `@/components/*` | `./src/components/*` |
-| web       | `@/lib/*`        | `./src/lib/*`        |
-| agent     | `@/*`            | `./*`                |
+- Keep PRs focused on a single purpose.
+- Document non-obvious decisions and tradeoffs.
+- Use imperative commit messages.
+- Run the most relevant checks before opening a PR.
+- Include screenshots for UI changes.
