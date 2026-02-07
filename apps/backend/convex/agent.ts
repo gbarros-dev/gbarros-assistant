@@ -24,16 +24,47 @@ export const claimJob = mutation({
 });
 
 export const completeJob = mutation({
-  args: { jobId: v.id("agentQueue") },
+  args: {
+    jobId: v.id("agentQueue"),
+    modelUsed: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.jobId, { status: "completed" });
+    await ctx.db.patch(args.jobId, {
+      status: "completed",
+      modelUsed: args.modelUsed,
+    });
   },
 });
 
 export const failJob = mutation({
+  args: {
+    jobId: v.id("agentQueue"),
+    errorReason: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.jobId, {
+      status: "failed",
+      errorReason: args.errorReason,
+      errorMessage: args.errorMessage,
+    });
+  },
+});
+
+export const retryJob = mutation({
   args: { jobId: v.id("agentQueue") },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.jobId, { status: "failed" });
+    const job = await ctx.db.get(args.jobId);
+    if (!job) return false;
+    const attemptCount = (job.attemptCount ?? 0) + 1;
+    if (attemptCount >= 3) return false;
+    await ctx.db.patch(args.jobId, {
+      status: "pending",
+      attemptCount,
+      errorReason: undefined,
+      errorMessage: undefined,
+    });
+    return true;
   },
 });
 
@@ -67,6 +98,8 @@ export const getConversationContext = query({
       .filter((q) => q.eq(q.field("enabled"), true))
       .collect();
 
-    return { conversation, user, contact, messages, skills };
+    const agent = conversation.agentId ? await ctx.db.get(conversation.agentId) : null;
+
+    return { conversation, user, contact, messages, skills, agent };
   },
 });
