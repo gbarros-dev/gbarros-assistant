@@ -1,5 +1,5 @@
 import { startAgentLoop } from "./agent/loop";
-import { startWhatsApp } from "./whatsapp/connection";
+import { startWhatsAppRuntime } from "./whatsapp/runtime";
 
 async function main() {
   console.info("[main] Starting zenthor-assist agent...");
@@ -12,21 +12,24 @@ async function main() {
     }
   }
 
-  startAgentLoop();
-
+  const role = (process.env["AGENT_ROLE"] ?? "all").toLowerCase();
   const enableWhatsApp = process.env["ENABLE_WHATSAPP"] !== "false";
-  if (enableWhatsApp) {
-    try {
-      await startWhatsApp();
-    } catch (error) {
-      console.error("[main] Failed to start WhatsApp:", error);
-      console.info("[main] Agent will continue without WhatsApp");
-    }
-  } else {
-    console.info("[main] WhatsApp disabled via ENABLE_WHATSAPP=false");
+
+  if (role === "core" || role === "all") {
+    startAgentLoop();
   }
 
-  console.info("[main] Agent is running");
+  if (!enableWhatsApp) {
+    console.info("[main] WhatsApp disabled via ENABLE_WHATSAPP=false");
+  } else if (role === "whatsapp" || role === "all") {
+    await startWhatsAppRuntime({ enableIngress: true, enableEgress: true });
+  } else if (role === "whatsapp-ingress") {
+    await startWhatsAppRuntime({ enableIngress: true, enableEgress: false });
+  } else if (role === "whatsapp-egress") {
+    await startWhatsAppRuntime({ enableIngress: false, enableEgress: true });
+  }
+
+  console.info(`[main] Agent is running (role: ${role})`);
 }
 
 main().catch((error) => {
