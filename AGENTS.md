@@ -26,36 +26,37 @@ Verified against this repository on 2026-02-07.
 
 ### Root commands
 
-| Command                    | Description |
-| -------------------------- | ----------- |
+| Command                    | Description                             |
+| -------------------------- | --------------------------------------- |
 | `bun install`              | Install dependencies for all workspaces |
-| `bun run build`            | Run Turborepo build pipeline |
-| `bun run lint`             | Oxlint at repo root |
-| `bun run lint:fix`         | Oxlint with autofix |
-| `bun run format`           | Oxfmt write mode |
-| `bun run format:check`     | Oxfmt check mode |
-| `bun run check`            | `oxlint && oxfmt --check` |
-| `bun run check:fix`        | `oxlint --fix && oxfmt --write` |
-| `bun run typecheck`        | `turbo run typecheck` |
-| `bun run knip`             | `turbo run knip --continue` |
-| `bun run knip:fix`         | `turbo run knip:fix --continue` |
-| `bun run static-analysis`  | lint + format check + typecheck + knip |
-| `bun run clean`            | Destructive cleanup of root artifacts |
-| `bun run clean:workspaces` | Run workspace `clean` scripts |
+| `bun run build`            | Run Turborepo build pipeline            |
+| `bun run lint`             | Oxlint at repo root                     |
+| `bun run lint:fix`         | Oxlint with autofix                     |
+| `bun run format`           | Oxfmt write mode                        |
+| `bun run format:check`     | Oxfmt check mode                        |
+| `bun run check`            | `oxlint && oxfmt --check`               |
+| `bun run check:fix`        | `oxlint --fix && oxfmt --write`         |
+| `bun run typecheck`        | `turbo run typecheck`                   |
+| `bun run knip`             | `turbo run knip --continue`             |
+| `bun run knip:fix`         | `turbo run knip:fix --continue`         |
+| `bun run static-analysis`  | lint + format check + typecheck + knip  |
+| `bun run clean`            | Destructive cleanup of root artifacts   |
+| `bun run clean:workspaces` | Run workspace `clean` scripts           |
 
 Important:
+
 - There is currently no root `dev` script in `package.json`.
 - `turbo run dev` is not configured (`dev` task missing in `turbo.json`).
 - Run dev servers per workspace instead.
 
 ### Workspace dev commands
 
-| Workspace | Command | Notes |
-| --------- | ------- | ----- |
-| backend | `cd apps/backend && bun run dev` | Starts Convex dev server |
-| backend | `cd apps/backend && bun run dev:setup` | Initial Convex bootstrap/configure |
-| web | `cd apps/web && bun run dev` | Next.js dev server (default port 3000 unless `PORT` is set) |
-| agent | `cd apps/agent && bun run dev` | Bun watch mode for the agent runtime |
+| Workspace | Command                                | Notes                                                       |
+| --------- | -------------------------------------- | ----------------------------------------------------------- |
+| backend   | `cd apps/backend && bun run dev`       | Starts Convex dev server                                    |
+| backend   | `cd apps/backend && bun run dev:setup` | Initial Convex bootstrap/configure                          |
+| web       | `cd apps/web && bun run dev`           | Next.js dev server (default port 3000 unless `PORT` is set) |
+| agent     | `cd apps/agent && bun run dev`         | Bun watch mode for the agent runtime                        |
 
 ## Validation Expectations
 
@@ -135,16 +136,19 @@ Use `.env.local` files per app (gitignored) and Convex dashboard env for deploye
 ### Web env (`@zenthor-assist/env/web`)
 
 Required:
+
 - `NEXT_PUBLIC_CONVEX_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 
 ### Agent env (`@zenthor-assist/env/agent`)
 
 Required:
+
 - `CONVEX_URL`
 - `AI_GATEWAY_API_KEY`
 
 Optional:
+
 - `AI_MODEL` (defaults to `anthropic/claude-sonnet-4-20250514`)
 - `AGENT_SECRET`
 - `ENABLE_WHATSAPP` (`false` disables WhatsApp startup)
@@ -152,6 +156,7 @@ Optional:
 ### Backend/Convex env (read directly in Convex functions)
 
 Commonly required by current code:
+
 - `CLERK_JWT_ISSUER_DOMAIN` (`auth.config.ts`)
 - `CLERK_WEBHOOK_SECRET` (`clerk/http.ts`)
 - `CLERK_SECRET_KEY` (`clerk/sync.ts`)
