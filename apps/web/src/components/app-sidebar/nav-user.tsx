@@ -1,8 +1,9 @@
 "use client";
 
 import { SignOutButton, useUser } from "@clerk/nextjs";
-import { ChevronsUpDown, LogOut, Moon, Sun } from "lucide-react";
+import { ChevronsUpDown, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import Link from "next/link";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -68,6 +69,12 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href={"/settings" as "/"}>
+                <Settings />
+                Settings
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
               {theme === "dark" ? <Sun /> : <Moon />}
               {theme === "dark" ? "Light mode" : "Dark mode"}

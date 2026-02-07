@@ -9,12 +9,14 @@ import {
   MessageCircle,
   MessageSquare,
   Plus,
+  Settings,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type * as React from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -56,18 +58,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [pathname]);
 
   async function handleNewChat() {
-    const id = await createConversation({ userId });
-    router.push(`/chat/${id}`);
+    try {
+      const id = await createConversation({ userId });
+      router.push(`/chat/${id}`);
+    } catch {
+      toast.error("Failed to create conversation");
+    }
   }
 
   async function handleArchive(e: React.MouseEvent, conversationId: string) {
     e.preventDefault();
     e.stopPropagation();
-    await archiveConversation({
-      id: conversationId as Parameters<typeof archiveConversation>[0]["id"],
-    });
-    if (pathname.includes(conversationId)) {
-      router.push("/chat");
+    try {
+      await archiveConversation({
+        id: conversationId as Parameters<typeof archiveConversation>[0]["id"],
+      });
+      toast.success("Conversation archived");
+      if (pathname.includes(conversationId)) {
+        router.push("/chat");
+      }
+    } catch {
+      toast.error("Failed to archive conversation");
     }
   }
 
@@ -117,6 +128,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <Link href={"/skills" as "/"}>
                     <Sparkles />
                     <span>Skills</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
+                  <Link href={"/settings" as "/"}>
+                    <Settings />
+                    <span>Settings</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
