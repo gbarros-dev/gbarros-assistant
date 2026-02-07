@@ -62,7 +62,9 @@ export default defineSchema({
         ),
       }),
     ),
-  }).index("by_name", ["name"]),
+  })
+    .index("by_name", ["name"])
+    .index("by_enabled", ["enabled"]),
 
   whatsappSession: defineTable({
     key: v.string(),
@@ -100,7 +102,9 @@ export default defineSchema({
         deny: v.optional(v.array(v.string())),
       }),
     ),
-  }).index("by_name", ["name"]),
+  })
+    .index("by_name", ["name"])
+    .index("by_enabled", ["enabled"]),
 
   memories: defineTable({
     conversationId: v.optional(v.id("conversations")),
