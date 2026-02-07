@@ -6,13 +6,15 @@ Verified against this repository on 2026-02-07.
 
 - Monorepo: Bun workspaces + Turborepo
 - Apps:
-  - `apps/web` (`@zenthor-assist/web`) - Next.js 16 + React 19 + TailwindCSS v4 + shadcn/ui
+  - `apps/web` (`@zenthor-assist/web`) - Next.js 16 + React 19 + TailwindCSS v4 + shadcn/ui + AI Elements
   - `apps/backend` (`@zenthor-assist/backend`) - Convex backend
-  - `apps/agent` (`@zenthor-assist/agent`) - Bun agent runtime (AI SDK + optional WhatsApp via Baileys)
+  - `apps/agent` (`@zenthor-assist/agent`) - Bun agent runtime (AI SDK, plugin runtime, optional WhatsApp via Baileys)
 - Packages:
   - `packages/config` - shared TypeScript base config
   - `packages/env` - typed env validators for web/agent
-- Tooling: Oxlint, Oxfmt, TypeScript, Knip
+  - `packages/observability` - shared observability context/events/logger types
+  - `packages/agent-plugins` - plugin manifest/types/validators shared with runtime
+- Tooling: Oxlint, Oxfmt, TypeScript, Knip, Vitest
 
 ## Core Engineering Practices
 
@@ -26,37 +28,47 @@ Verified against this repository on 2026-02-07.
 
 ### Root commands
 
-| Command                    | Description                             |
-| -------------------------- | --------------------------------------- |
-| `bun install`              | Install dependencies for all workspaces |
-| `bun run build`            | Run Turborepo build pipeline            |
-| `bun run lint`             | Oxlint at repo root                     |
-| `bun run lint:fix`         | Oxlint with autofix                     |
-| `bun run format`           | Oxfmt write mode                        |
-| `bun run format:check`     | Oxfmt check mode                        |
-| `bun run check`            | `oxlint && oxfmt --check`               |
-| `bun run check:fix`        | `oxlint --fix && oxfmt --write`         |
-| `bun run typecheck`        | `turbo run typecheck`                   |
-| `bun run knip`             | `turbo run knip --continue`             |
-| `bun run knip:fix`         | `turbo run knip:fix --continue`         |
-| `bun run static-analysis`  | lint + format check + typecheck + knip  |
-| `bun run clean`            | Destructive cleanup of root artifacts   |
-| `bun run clean:workspaces` | Run workspace `clean` scripts           |
+| Command                    | Description                                   |
+| -------------------------- | --------------------------------------------- |
+| `bun install`              | Install dependencies for all workspaces       |
+| `bun run build`            | Run Turborepo build pipeline                  |
+| `bun run lint`             | Oxlint at repo root                           |
+| `bun run lint:fix`         | Oxlint with autofix                           |
+| `bun run format`           | Oxfmt write mode                              |
+| `bun run format:check`     | Oxfmt check mode                              |
+| `bun run check`            | `oxlint && oxfmt --check`                     |
+| `bun run check:fix`        | `oxlint --fix && oxfmt --write`               |
+| `bun run typecheck`        | `turbo run typecheck`                         |
+| `bun run knip`             | `turbo run knip --continue`                   |
+| `bun run knip:fix`         | `turbo run knip:fix --continue`               |
+| `bun run static-analysis`  | lint + format check + typecheck + knip        |
+| `bun run test`             | Run Vitest in watch mode                      |
+| `bun run test:run`         | Run Vitest once                               |
+| `bun run clean`            | Destructive cleanup of root artifacts         |
+| `bun run clean:workspaces` | Run workspace `clean` scripts                 |
 
 Important:
 
-- There is currently no root `dev` script in `package.json`.
+- There is no root `dev` script in `package.json`.
 - `turbo run dev` is not configured (`dev` task missing in `turbo.json`).
-- Run dev servers per workspace instead.
+- Run dev servers per workspace.
 
-### Workspace dev commands
+### Workspace dev/start commands
 
-| Workspace | Command                                | Notes                                                       |
-| --------- | -------------------------------------- | ----------------------------------------------------------- |
-| backend   | `cd apps/backend && bun run dev`       | Starts Convex dev server                                    |
-| backend   | `cd apps/backend && bun run dev:setup` | Initial Convex bootstrap/configure                          |
-| web       | `cd apps/web && bun run dev`           | Next.js dev server (default port 3000 unless `PORT` is set) |
-| agent     | `cd apps/agent && bun run dev`         | Bun watch mode for the agent runtime                        |
+| Workspace | Command                                                 | Notes |
+| --------- | ------------------------------------------------------- | ----- |
+| backend   | `cd apps/backend && bun run dev`                        | Starts Convex dev server |
+| backend   | `cd apps/backend && bun run dev:setup`                  | First-time Convex bootstrap/configure |
+| web       | `cd apps/web && bun run dev`                            | Next.js dev server (default port 3000 unless `PORT` is set) |
+| agent     | `cd apps/agent && bun run dev`                          | Watch mode, default role `all` |
+| agent     | `cd apps/agent && bun run dev:core`                     | Watch mode, core processing only |
+| agent     | `cd apps/agent && bun run dev:whatsapp`                 | Watch mode, WhatsApp runtime (no core loop) |
+| agent     | `cd apps/agent && bun run dev:whatsapp-ingress`         | Watch mode, WhatsApp ingress only |
+| agent     | `cd apps/agent && bun run dev:whatsapp-egress`          | Watch mode, WhatsApp egress only |
+| agent     | `cd apps/agent && bun run start:core`                   | Non-watch core mode |
+| agent     | `cd apps/agent && bun run start:whatsapp`               | Non-watch WhatsApp mode |
+| agent     | `cd apps/agent && bun run start:whatsapp-ingress`       | Non-watch ingress mode |
+| agent     | `cd apps/agent && bun run start:whatsapp-egress`        | Non-watch egress mode |
 
 ## Validation Expectations
 
@@ -68,7 +80,10 @@ Important:
 - For cross-workspace changes, run root checks:
   - `bun run check`
   - `bun run typecheck`
-  - `bun run knip` (or `bun run static-analysis` for full pass)
+  - `bun run knip`
+- For behavior/runtime logic changes, run relevant tests:
+  - `bun run test:run` (full)
+  - `bun run test:run -- <path-to-test-file>` (targeted)
 
 ## Project Structure
 
@@ -92,15 +107,21 @@ zenthor-assist/
 │   │       └── _generated/           # Generated Convex types (do not edit)
 │   └── agent/
 │       └── src/
-│           ├── agent/                # Agent loop + generation + tools
+│           ├── agent/                # Agent loop + generation + tools + plugins
 │           ├── convex/               # Convex client wiring
-│           └── whatsapp/             # Baileys integration
+│           ├── observability/        # Runtime logging/sentry
+│           └── whatsapp/             # Baileys integration + lease-aware runtime
 ├── packages/
 │   ├── config/                       # Shared tsconfig.base.json
-│   └── env/                          # Typed env schemas (`./web`, `./agent`)
+│   ├── env/                          # Typed env schemas (`./web`, `./agent`)
+│   ├── observability/                # Shared telemetry helpers/types
+│   └── agent-plugins/                # Plugin manifest/types/validators
+├── docs/ops/                         # Runbooks/topology/deployment notes
 ├── turbo.json
 ├── .oxlintrc.json
-└── .oxfmtrc.json
+├── .oxfmtrc.json
+├── vitest.config.ts
+└── AGENTS.md
 ```
 
 ## Architecture Notes
@@ -112,25 +133,38 @@ zenthor-assist/
   - Clerk auth context
   - Convex React client
   - Theme provider + Sonner toaster
+  - Tooltip provider
 - Protected routes are enforced in `apps/web/src/proxy.ts` for:
   - `/chat(.*)`
+  - `/home(.*)`
   - `/dashboard(.*)`
   - `/skills(.*)`
+  - `/settings(.*)`
 
 ### Backend (`apps/backend/convex`)
 
 - Schema is defined in `apps/backend/convex/schema.ts`.
 - Core tables:
-  - `users`, `contacts`, `conversations`, `messages`, `skills`, `whatsappSession`, `agentQueue`
+  - `users`, `contacts`, `phoneVerifications`
+  - `conversations`, `messages`, `agentQueue`
+  - `agents`, `skills`, `toolApprovals`, `memories`, `scheduledTasks`
+  - `whatsappSession`, `whatsappAccounts`, `whatsappLeases`, `outboundMessages`, `inboundDedupe`
+  - `pluginDefinitions`, `pluginInstalls`, `pluginPolicies`
 - Clerk webhook endpoint is mounted at `/clerk/webhook` via `apps/backend/convex/http.ts`.
+- Crons in `apps/backend/convex/crons.ts` handle stale-job requeue, scheduled-task processing, and cleanup jobs.
 - Convex-generated files are under `apps/backend/convex/_generated` and should not be manually edited.
 
 ### Agent (`apps/agent`)
 
 - Entry point: `apps/agent/src/index.ts`.
-- Main loop subscribes to pending jobs via `api.agent.getPendingJobs`, claims jobs, generates responses, and writes results back to Convex.
-- Web conversations use streaming placeholder updates; WhatsApp conversations send final text via Baileys.
-- Built-in tool registration starts in `apps/agent/src/agent/tools/index.ts`; provider-specific web search tooling is added in `tools/web-search.ts`.
+- Role entry wrappers:
+  - `apps/agent/src/index.core.ts`
+  - `apps/agent/src/index.whatsapp-ingress.ts`
+  - `apps/agent/src/index.whatsapp-egress.ts`
+- Main loop subscribes to pending jobs via `api.agent.getPendingJobs`, claims with lease/heartbeat semantics, generates responses, and writes results back to Convex.
+- Web conversations use streaming placeholder updates; WhatsApp conversations are queued to outbound delivery via `api.delivery.enqueueOutbound`.
+- Tools are resolved through plugin activation/policy + built-ins, then wrapped with approval flow for risky tool usage.
+- Built-in tool registration starts in `apps/agent/src/agent/tools/index.ts`; provider-specific web search tooling is injected via `tools/web-search.ts`.
 
 ## Chat UI (AI Elements)
 
@@ -142,10 +176,10 @@ The web chat interface (`apps/web/src/components/chat/`) uses **AI Elements**, a
 - `message.tsx` — Role-based message bubbles + markdown rendering via Streamdown (GFM, math, mermaid, CJK)
 - `prompt-input.tsx` — Rich text input (Enter/Shift+Enter, file upload, paste support)
 - `tool.tsx` — Collapsible tool call cards with status badges
-- `confirmation.tsx` — AI SDK approval flow (installed but unused — we use a custom ApprovalCard)
+- `confirmation.tsx` — AI SDK approval flow (installed but currently replaced with custom ApprovalCard usage)
 - `code-block.tsx` — Syntax-highlighted code blocks via Shiki
 
-### Adding new AI Elements
+### Adding New AI Elements
 
 ```bash
 cd apps/web
@@ -157,39 +191,18 @@ Components are ignored by knip (see `apps/web/package.json` knip config).
 
 ### Adapter Pattern
 
-Messages come from **Convex queries** (not AI SDK `useChat`). The adapter hook `use-convex-messages.ts` maps Convex docs to AI Elements shapes:
+Messages come from Convex queries (not AI SDK `useChat`). The adapter hook `use-convex-messages.ts` maps Convex docs to AI Elements shapes:
 
-```
-Convex queries → useConvexMessages(conversationId) → { messages, isProcessing, pendingApprovals, sendMessage }
+```txt
+Convex queries → useConvexMessages(conversationId) → { messages, isProcessing, hasStreamingMessage, pendingApprovals, sendMessage }
 ```
 
 Key rules:
 - `Message from={role}` matches our schema: `"user" | "assistant" | "system"`.
-- `MessageResponse` handles all markdown (replaces old `react-markdown` + `remark-gfm`).
-- Tool calls: use `ToolHeader type="dynamic-tool" toolName={name}` (our tools are dynamically named).
-- Tool approvals: custom `ApprovalCard` with `Alert` component instead of `Confirmation` (our approval model is simpler than AI SDK's state machine).
-- Message grouping (120s threshold, `position: first|middle|last|single`) computed in the adapter hook.
-
-### Chat File Structure
-
-```
-src/components/chat/
-├── chat-area.tsx              # Main chat — composes AI Elements components
-├── use-convex-messages.ts     # Adapter: Convex queries → component-friendly data
-└── typing-indicator.tsx       # Bounce-dot typing indicator
-```
-
-### Error Handling
-
-Mutations use try/catch with `toast.error()` (Sonner) + `logWebClientEvent()` (observability).
-
-### Expanding the Chat UI
-
-- **New message types**: Extend `ChatMessage` in `use-convex-messages.ts`, add rendering branch in `chat-area.tsx`.
-- **Tool states**: Use `ToolHeader state` prop (`input-streaming`, `input-available`, `output-available`, `output-error`, `output-denied`, `approval-requested`, `approval-responded`).
-- **Message actions** (copy, retry): Use `MessageActions` + `MessageAction` from `ai-elements/message.tsx`.
-- **Branching/edits**: Use `MessageBranch` + `MessageBranchContent` + `MessageBranchSelector`.
-- **File attachments**: Use `PromptInputActionMenu` + `PromptInputActionAddAttachments`.
+- `MessageResponse` handles assistant markdown rendering.
+- Tool calls use `ToolHeader type="dynamic-tool" toolName={name}`.
+- Tool approvals are shown with custom `ApprovalCard` + `Alert`.
+- Message grouping (120s threshold, `position: first|middle|last|single`) is computed in the adapter hook.
 
 ## Environment Variables
 
@@ -198,27 +211,54 @@ Use `.env.local` files per app (gitignored) and Convex dashboard env for deploye
 ### Web env (`@zenthor-assist/env/web`)
 
 Required:
-
 - `NEXT_PUBLIC_CONVEX_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+
+Optional observability:
+- `AXIOM_TOKEN`
+- `AXIOM_DATASET`
+- `OBS_ENABLED`
+- `OBS_SAMPLE_RATE`
+- `OBS_LOG_LEVEL`
+- `OBS_INCLUDE_CONTENT`
 
 ### Agent env (`@zenthor-assist/env/agent`)
 
 Required:
-
 - `CONVEX_URL`
 - `AI_GATEWAY_API_KEY`
 
-Optional:
-
-- `AI_MODEL` (defaults to `anthropic/claude-sonnet-4-20250514`)
+Key optional:
+- `AI_MODEL` (default `anthropic/claude-sonnet-4-20250514`)
+- `AI_FALLBACK_MODEL`
+- `AI_CONTEXT_WINDOW`
+- `AI_EMBEDDING_MODEL` (default `openai/text-embedding-3-small`)
 - `AGENT_SECRET`
-- `ENABLE_WHATSAPP` (`false` disables WhatsApp startup)
+- `AGENT_ROLE` (`all | core | whatsapp | whatsapp-ingress | whatsapp-egress`)
+- `WORKER_ID`
+- `AGENT_JOB_LOCK_MS`
+- `AGENT_JOB_HEARTBEAT_MS`
+- `ENABLE_WHATSAPP`
+- `WHATSAPP_ACCOUNT_ID`
+- `WHATSAPP_PHONE`
+- `WHATSAPP_LEASE_TTL_MS`
+- `WHATSAPP_AUTH_MODE` (`local | convex`, default `local`)
+- `WHATSAPP_HEARTBEAT_MS`
+- `AXIOM_TOKEN`
+- `AXIOM_DATASET`
+- `SENTRY_DSN`
+- `SENTRY_ENABLED`
+- `SENTRY_TRACES_SAMPLE_RATE`
+- `SENTRY_ENVIRONMENT`
+- `SENTRY_RELEASE`
+- `OBS_ENABLED`
+- `OBS_SAMPLE_RATE`
+- `OBS_LOG_LEVEL`
+- `OBS_INCLUDE_CONTENT`
 
-### Backend/Convex env (read directly in Convex functions)
+### Backend/Convex env
 
-Commonly required by current code:
-
+Required by current code:
 - `CLERK_JWT_ISSUER_DOMAIN` (`auth.config.ts`)
 - `CLERK_WEBHOOK_SECRET` (`clerk/http.ts`)
 - `CLERK_SECRET_KEY` (`clerk/sync.ts`)
@@ -250,7 +290,9 @@ Commonly required by current code:
   - `@zenthor-assist/backend/convex/_generated/*`
   - `@zenthor-assist/env/web`
   - `@zenthor-assist/env/agent`
-- Agent code currently uses relative imports (no local `@/*` alias configured).
+  - `@zenthor-assist/observability`
+  - `@zenthor-assist/agent-plugins/*`
+- Agent code primarily uses relative imports for local modules.
 
 ## Generated and Sensitive Files
 
@@ -259,14 +301,28 @@ Commonly required by current code:
   - `.next/**`, `dist/**`, `.turbo/**`
 - Do not commit secrets:
   - `.env*`, `.env*.local` are gitignored
+  - `.whatsapp-auth/**` and `.auth/**` hold local auth/session artifacts
 
 ## Testing Guidance
 
-- There is no dedicated test suite currently in this repo.
+- The repository has active tests (Vitest) in:
+  - `apps/*/src/**/*.test.ts`
+  - `packages/*/src/**/*.test.ts`
+- Existing coverage focuses on agent reliability, policy/approval logic, and plugin validation.
 - If adding tests:
   - Co-locate as `*.test.ts` or `*.test.tsx`
-  - Use Bun test runner (`bun test`)
-  - Prefer targeted runs over broad suites
+  - Use `bun run test:run` for CI-style runs
+  - Prefer targeted runs over broad suites when iterating locally
+
+## Documentation Canonical Set
+
+When behavior/scripts/architecture changes, update these together in the same PR:
+
+- `AGENTS.md` (Codex operating guide)
+- `CLAUDE.md` (Claude Code operating guide)
+- `README.md` (human onboarding + quickstart)
+- `apps/backend/convex/README.md` (backend-specific contributor notes)
+- `docs/ops/runtime-topology.md` and `docs/ops/runbook.md` (runtime operations)
 
 ## PR and Collaboration Guidelines
 

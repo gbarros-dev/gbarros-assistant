@@ -61,4 +61,5 @@ Do not proceed if any are true:
 ## Related Docs
 
 - `docs/ops/runbook.md`
+- `docs/ops/incidents.md`
 - `docs/ops/refactor-summary.md`

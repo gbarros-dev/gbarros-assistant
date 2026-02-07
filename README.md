@@ -1,76 +1,112 @@
 # zenthor-assist
 
-Official domain: `https://zenthor-assist.xyz`
+Monorepo for Zenthor Assist: web app, Convex backend, and long-running AI agent workers.
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Convex, and more.
+## Stack
 
-## Features
+- Bun workspaces + Turborepo
+- `apps/web`: Next.js 16 + React 19 + TailwindCSS v4 + shadcn/ui + Clerk
+- `apps/backend`: Convex functions/schema + Clerk sync/webhooks
+- `apps/agent`: Bun runtime using AI SDK + optional WhatsApp (Baileys)
+- Shared packages: `@zenthor-assist/config`, `@zenthor-assist/env`, `@zenthor-assist/observability`, `@zenthor-assist/agent-plugins`
 
-- **TypeScript** - For type safety and improved developer experience
-- **Next.js** - Full-stack React framework
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **shadcn/ui** - Reusable UI components
-- **Convex** - Reactive backend-as-a-service platform
-- **Authentication** - Clerk
-- **Oxlint** - Oxlint + Oxfmt (linting & formatting)
-- **Turborepo** - Optimized monorepo build system
+## Prerequisites
+
+- Bun `1.3.8+`
+- A Convex project
+- Clerk app/JWT template for Convex auth
+- AI Gateway API key for agent runtime
 
 ## Getting Started
 
-First, install the dependencies:
+1. Install dependencies:
 
 ```bash
 bun install
 ```
 
-## Convex Setup
-
-This project uses Convex as a backend. You'll need to set up Convex before running the app:
+2. Configure backend (first time):
 
 ```bash
+cd apps/backend
 bun run dev:setup
 ```
 
-Follow the prompts to create a new Convex project and connect it to your application.
+3. Set environment variables:
+- Web (`apps/web/.env.local`):
+  - `NEXT_PUBLIC_CONVEX_URL`
+  - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- Agent (`apps/agent/.env.local`):
+  - `CONVEX_URL`
+  - `AI_GATEWAY_API_KEY`
+- Convex Dashboard env:
+  - `CLERK_JWT_ISSUER_DOMAIN`
+  - `CLERK_WEBHOOK_SECRET`
+  - `CLERK_SECRET_KEY`
 
-Copy environment variables from `packages/backend/.env.local` to `apps/*/.env`.
-
-### Clerk Authentication Setup
-
-- Follow the guide: [Convex + Clerk](https://docs.convex.dev/auth/clerk)
-- Set `CLERK_JWT_ISSUER_DOMAIN` in Convex Dashboard
-- Set `CLERK_PUBLISHABLE_KEY` in `apps/*/.env`
-
-Then, run the development server:
+4. Start local services (separate terminals):
 
 ```bash
-bun run dev
+# Terminal 1
+cd apps/backend && bun run dev
+
+# Terminal 2
+cd apps/web && bun run dev
+
+# Terminal 3 (optional for agent processing without WhatsApp)
+cd apps/agent && bun run dev:core
 ```
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
-Your app will connect to the Convex cloud backend automatically.
+## Common Commands
 
-## Git Hooks and Formatting
+### Root
 
-- Format and lint fix: `bun run check`
+- `bun run build`
+- `bun run check`
+- `bun run check:fix`
+- `bun run typecheck`
+- `bun run knip`
+- `bun run static-analysis`
+- `bun run test`
+- `bun run test:run`
+
+### Workspace dev/start
+
+- Backend:
+  - `cd apps/backend && bun run dev`
+  - `cd apps/backend && bun run dev:setup`
+- Web:
+  - `cd apps/web && bun run dev`
+- Agent:
+  - `cd apps/agent && bun run dev`
+  - `cd apps/agent && bun run dev:core`
+  - `cd apps/agent && bun run dev:whatsapp`
+  - `cd apps/agent && bun run start:core`
+  - `cd apps/agent && bun run start:whatsapp`
 
 ## Project Structure
 
-```
+```txt
 zenthor-assist/
 ├── apps/
-│   ├── web/         # Frontend application (Next.js)
+│   ├── web/
+│   ├── backend/
+│   │   └── convex/
+│   └── agent/
 ├── packages/
-│   ├── backend/     # Convex backend functions and schema
-│   │   ├── convex/    # Convex functions and schema
-│   │   └── .env.local # Convex environment variables
+│   ├── config/
+│   ├── env/
+│   ├── observability/
+│   └── agent-plugins/
+├── docs/ops/
+├── AGENTS.md
+└── CLAUDE.md
 ```
 
-## Available Scripts
+## Additional Documentation
 
-- `bun run dev`: Start all applications in development mode
-- `bun run build`: Build all applications
-- `bun run dev:web`: Start only the web application
-- `bun run dev:setup`: Setup and configure your Convex project
-- `bun run check-types`: Check TypeScript types across all apps
-- `bun run check`: Run Oxlint and Oxfmt
+- `AGENTS.md`: Canonical coding-agent guide for this repo.
+- `CLAUDE.md`: Claude Code guidance aligned with `AGENTS.md`.
+- `apps/backend/convex/README.md`: Backend-specific function/schema notes.
+- `docs/ops/runtime-topology.md`: Core vs WhatsApp runtime topology.
+- `docs/ops/runbook.md`: Smoke-test operations runbook.
