@@ -2,8 +2,28 @@ import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
 
+const toolPolicyValidator = v.optional(
+  v.object({
+    allow: v.optional(v.array(v.string())),
+    deny: v.optional(v.array(v.string())),
+  }),
+);
+
+const agentDoc = v.object({
+  _id: v.id("agents"),
+  _creationTime: v.number(),
+  name: v.string(),
+  description: v.string(),
+  systemPrompt: v.string(),
+  model: v.optional(v.string()),
+  fallbackModel: v.optional(v.string()),
+  enabled: v.boolean(),
+  toolPolicy: toolPolicyValidator,
+});
+
 export const list = query({
   args: {},
+  returns: v.array(agentDoc),
   handler: async (ctx) => {
     return await ctx.db.query("agents").collect();
   },
@@ -11,6 +31,7 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("agents") },
+  returns: v.union(agentDoc, v.null()),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
   },
@@ -18,16 +39,18 @@ export const get = query({
 
 export const getDefault = query({
   args: {},
+  returns: v.union(agentDoc, v.null()),
   handler: async (ctx) => {
     return await ctx.db
       .query("agents")
-      .filter((q) => q.eq(q.field("enabled"), true))
+      .withIndex("by_enabled", (q) => q.eq("enabled", true))
       .first();
   },
 });
 
 export const getByName = query({
   args: { name: v.string() },
+  returns: v.union(agentDoc, v.null()),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("agents")
@@ -44,13 +67,9 @@ export const create = mutation({
     model: v.optional(v.string()),
     fallbackModel: v.optional(v.string()),
     enabled: v.boolean(),
-    toolPolicy: v.optional(
-      v.object({
-        allow: v.optional(v.array(v.string())),
-        deny: v.optional(v.array(v.string())),
-      }),
-    ),
+    toolPolicy: toolPolicyValidator,
   },
+  returns: v.id("agents"),
   handler: async (ctx, args) => {
     return await ctx.db.insert("agents", args);
   },
@@ -65,13 +84,9 @@ export const update = mutation({
     model: v.optional(v.string()),
     fallbackModel: v.optional(v.string()),
     enabled: v.optional(v.boolean()),
-    toolPolicy: v.optional(
-      v.object({
-        allow: v.optional(v.array(v.string())),
-        deny: v.optional(v.array(v.string())),
-      }),
-    ),
+    toolPolicy: toolPolicyValidator,
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { id, ...fields } = args;
     await ctx.db.patch(id, fields);
@@ -80,6 +95,7 @@ export const update = mutation({
 
 export const remove = mutation({
   args: { id: v.id("agents") },
+  returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
   },
