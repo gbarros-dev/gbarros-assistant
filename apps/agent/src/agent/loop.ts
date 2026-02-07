@@ -17,6 +17,7 @@ import {
 } from "./plugins/loader";
 import { wrapToolsWithApproval } from "./tool-approval";
 import { filterTools, getDefaultPolicy, mergeToolPolicies } from "./tool-policy";
+import { createMemoryTools } from "./tools/memory";
 import { createScheduleTask } from "./tools/schedule";
 
 /** Convert any remaining markdown syntax to WhatsApp-compatible formatting */
@@ -142,6 +143,7 @@ export function startAgentLoop() {
         const { messages: compactedMessages, summary } = await compactMessages(
           conversationMessages,
           env.AI_CONTEXT_WINDOW,
+          job.conversationId,
         );
         conversationMessages = compactedMessages;
 
@@ -213,6 +215,15 @@ export function startAgentLoop() {
           pluginTools.tools.schedule_task = createScheduleTask(job.conversationId);
         }
 
+        // Bind memory tools to this conversation to prevent cross-conversation data leaks
+        const scopedMemory = createMemoryTools(job.conversationId);
+        if (pluginTools.tools.memory_search) {
+          pluginTools.tools.memory_search = scopedMemory.memory_search;
+        }
+        if (pluginTools.tools.memory_store) {
+          pluginTools.tools.memory_store = scopedMemory.memory_store;
+        }
+
         // Build channel-aware tool policy
         const channelPolicy = getDefaultPolicy(channel);
         const skillPolicies = context.skills
@@ -258,7 +269,12 @@ export function startAgentLoop() {
                       messageId: placeholderId,
                       content: accumulatedText,
                     })
-                    .catch(() => {});
+                    .catch((err) => {
+                      void logger.warn("agent.stream.update_failed", {
+                        jobId: job._id,
+                        error: err instanceof Error ? err.message : String(err),
+                      });
+                    });
                 }
               },
             },
@@ -266,6 +282,19 @@ export function startAgentLoop() {
           );
 
           modelUsed = response.modelUsed;
+
+          // Send final unthrottled update so the UI shows complete text before finalize
+          await client
+            .mutation(api.messages.updateStreamingContent, {
+              messageId: placeholderId,
+              content: response.content,
+            })
+            .catch((err) => {
+              void logger.warn("agent.stream.final_update_failed", {
+                jobId: job._id,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
 
           await client.mutation(api.messages.finalizeMessage, {
             messageId: placeholderId,

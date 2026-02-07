@@ -72,6 +72,7 @@ export const search = action({
   args: {
     embedding: v.array(v.float64()),
     limit: v.optional(v.number()),
+    conversationId: v.optional(v.id("conversations")),
   },
   handler: async (
     ctx,
@@ -80,6 +81,9 @@ export const search = action({
     const results = await ctx.vectorSearch("memories", "by_embedding", {
       vector: args.embedding,
       limit: args.limit ?? 5,
+      ...(args.conversationId !== undefined && {
+        filter: (q) => q.eq("conversationId", args.conversationId),
+      }),
     });
 
     const docs = await ctx.runQuery(internal.memories.fetchResults, {

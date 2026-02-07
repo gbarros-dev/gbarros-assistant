@@ -1,5 +1,6 @@
 import { createGateway } from "@ai-sdk/gateway";
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
+import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { env } from "@zenthor-assist/env/agent";
 import { generateText } from "ai";
 
@@ -105,6 +106,7 @@ async function summarizeWithFallback(chunks: Message[][]): Promise<string> {
 export async function compactMessages(
   messages: Message[],
   contextWindow?: number,
+  conversationId?: Id<"conversations">,
 ): Promise<{ messages: Message[]; summary?: string }> {
   const maxContext = contextWindow ?? DEFAULT_CONTEXT_WINDOW;
   const guard = evaluateContext(messages, maxContext);
@@ -141,6 +143,7 @@ export async function compactMessages(
       content: summaryText,
       embedding,
       source: "conversation" as const,
+      ...(conversationId !== undefined && { conversationId }),
     });
   } catch {
     // Non-critical: don't fail compaction if memory storage fails

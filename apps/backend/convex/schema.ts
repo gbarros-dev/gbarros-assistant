@@ -155,7 +155,7 @@ export default defineSchema({
     .vectorIndex("by_embedding", {
       vectorField: "embedding",
       dimensions: 1536,
-      filterFields: ["source"],
+      filterFields: ["source", "conversationId"],
     }),
 
   scheduledTasks: defineTable({
