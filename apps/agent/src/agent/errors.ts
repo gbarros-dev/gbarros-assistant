@@ -3,6 +3,9 @@ type FailoverReason =
   | "billing"
   | "rate_limit"
   | "timeout"
+  | "server_error"
+  | "network"
+  | "content_filter"
   | "format"
   | "context_overflow"
   | "unknown";
@@ -38,7 +41,7 @@ const PATTERNS: Array<{ reason: FailoverReason; regex: RegExp; statuses?: number
   },
   {
     reason: "timeout",
-    regex: /timeout|timed out|deadline exceeded|ETIMEDOUT|ECONNRESET/i,
+    regex: /timeout|timed out|deadline exceeded|ETIMEDOUT/i,
   },
   {
     reason: "auth",
@@ -49,6 +52,19 @@ const PATTERNS: Array<{ reason: FailoverReason; regex: RegExp; statuses?: number
     reason: "billing",
     regex: /payment required|insufficient credits/i,
     statuses: [402],
+  },
+  {
+    reason: "server_error",
+    regex: /internal server error|bad gateway|service unavailable|gateway timeout|overloaded/i,
+    statuses: [500, 502, 503, 504],
+  },
+  {
+    reason: "network",
+    regex: /ENOTFOUND|ECONNREFUSED|ECONNRESET|EPIPE|EAI_AGAIN|fetch failed|network error/i,
+  },
+  {
+    reason: "content_filter",
+    regex: /content filtering|content policy|safety system|blocked by safety/i,
   },
   {
     reason: "format",
@@ -76,5 +92,10 @@ export function classifyError(err: unknown): FailoverReason {
 }
 
 export function isRetryable(reason: FailoverReason): boolean {
-  return reason === "rate_limit" || reason === "timeout";
+  return (
+    reason === "rate_limit" ||
+    reason === "timeout" ||
+    reason === "server_error" ||
+    reason === "network"
+  );
 }
