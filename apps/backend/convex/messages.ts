@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
-import { requireConversationOwner } from "./lib/auth";
+import { getConversationIfOwner } from "./lib/auth";
 
 const messageDoc = v.object({
   _id: v.id("messages"),
@@ -26,13 +26,14 @@ export const send = mutation({
     content: v.string(),
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
   },
-  returns: v.id("messages"),
+  returns: v.union(v.id("messages"), v.null()),
   handler: async (ctx, args) => {
     // Verify ownership when called by an authenticated user (web).
     // Agent calls have no identity and bypass this check (secured at network level).
     const identity = await ctx.auth.getUserIdentity();
     if (identity) {
-      await requireConversationOwner(ctx, args.conversationId);
+      const conv = await getConversationIfOwner(ctx, args.conversationId);
+      if (!conv) return null;
     }
 
     const messageId = await ctx.db.insert("messages", {
@@ -147,7 +148,8 @@ export const listByConversation = query({
   args: { conversationId: v.id("conversations") },
   returns: v.array(messageDoc),
   handler: async (ctx, args) => {
-    await requireConversationOwner(ctx, args.conversationId);
+    const conv = await getConversationIfOwner(ctx, args.conversationId);
+    if (!conv) return [];
     return await ctx.db
       .query("messages")
       .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
@@ -161,7 +163,8 @@ export const get = query({
   handler: async (ctx, args) => {
     const msg = await ctx.db.get(args.id);
     if (!msg) return null;
-    await requireConversationOwner(ctx, msg.conversationId);
+    const conv = await getConversationIfOwner(ctx, msg.conversationId);
+    if (!conv) return null;
     return msg;
   },
 });

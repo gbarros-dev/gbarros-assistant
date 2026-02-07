@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
-import { requireConversationOwner, requireUser } from "./lib/auth";
+import { getAuthUser, getConversationIfOwner } from "./lib/auth";
 
 const conversationDoc = v.object({
   _id: v.id("conversations"),
@@ -67,7 +67,8 @@ export const listByUser = query({
   args: {},
   returns: v.array(conversationDoc),
   handler: async (ctx) => {
-    const user = await requireUser(ctx);
+    const user = await getAuthUser(ctx);
+    if (!user) return [];
     return await ctx.db
       .query("conversations")
       .withIndex("by_userId", (q) => q.eq("userId", user._id))
@@ -90,15 +91,7 @@ export const get = query({
   args: { id: v.id("conversations") },
   returns: v.union(conversationDoc, v.null()),
   handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const conversation = await ctx.db.get(args.id);
-    if (!conversation) return null;
-    if (conversation.userId === user._id) return conversation;
-    if (conversation.contactId) {
-      const contact = await ctx.db.get(conversation.contactId);
-      if (contact?.userId === user._id) return conversation;
-    }
-    return null;
+    return await getConversationIfOwner(ctx, args.id);
   },
 });
 
@@ -106,9 +99,10 @@ export const create = mutation({
   args: {
     title: v.optional(v.string()),
   },
-  returns: v.id("conversations"),
+  returns: v.union(v.id("conversations"), v.null()),
   handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
+    const user = await getAuthUser(ctx);
+    if (!user) return null;
     return await ctx.db.insert("conversations", {
       userId: user._id,
       channel: "web",
@@ -122,8 +116,8 @@ export const archive = mutation({
   args: { id: v.id("conversations") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const conv = await requireConversationOwner(ctx, args.id);
-    if (conv.channel === "whatsapp") throw new ConvexError("Cannot archive WhatsApp conversations");
+    const conv = await getConversationIfOwner(ctx, args.id);
+    if (!conv || conv.channel === "whatsapp") return null;
     await ctx.db.patch(args.id, { status: "archived" });
   },
 });
@@ -135,7 +129,8 @@ export const updateTitle = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireConversationOwner(ctx, args.id);
+    const conv = await getConversationIfOwner(ctx, args.id);
+    if (!conv) return null;
     await ctx.db.patch(args.id, { title: args.title });
   },
 });
@@ -163,7 +158,8 @@ export const listRecentWithLastMessage = query({
     }),
   ),
   handler: async (ctx) => {
-    const user = await requireUser(ctx);
+    const user = await getAuthUser(ctx);
+    if (!user) return [];
 
     // 1. Web conversations by userId
     const webConversations = await ctx.db

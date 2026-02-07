@@ -1,7 +1,7 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
-import { requireIdentity, requireUser } from "./lib/auth";
+import { getAuthUser } from "./lib/auth";
 
 const userDoc = v.object({
   _id: v.id("users"),
@@ -21,10 +21,8 @@ export const getByExternalId = query({
   args: { externalId: v.string() },
   returns: v.union(userDoc, v.null()),
   handler: async (ctx, args) => {
-    const identity = await requireIdentity(ctx);
-    if (identity.subject !== args.externalId) {
-      throw new ConvexError("Access denied");
-    }
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || identity.subject !== args.externalId) return null;
     return await ctx.db
       .query("users")
       .withIndex("by_externalId", (q) => q.eq("externalId", args.externalId))
@@ -38,9 +36,10 @@ export const getOrCreateFromClerk = mutation({
     email: v.optional(v.string()),
     image: v.optional(v.string()),
   },
-  returns: v.id("users"),
+  returns: v.union(v.id("users"), v.null()),
   handler: async (ctx, args) => {
-    const identity = await requireIdentity(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
     const externalId = identity.subject;
 
     const existing = await ctx.db
@@ -77,12 +76,11 @@ export const getCurrentUser = query({
   },
 });
 
-/** Authenticated version that throws on missing identity/user. */
 export const me = query({
   args: {},
-  returns: userDoc,
+  returns: v.union(userDoc, v.null()),
   handler: async (ctx) => {
-    return await requireUser(ctx);
+    return await getAuthUser(ctx);
   },
 });
 
@@ -90,7 +88,8 @@ export const list = query({
   args: {},
   returns: v.array(userDoc),
   handler: async (ctx) => {
-    await requireIdentity(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
     return await ctx.db.query("users").collect();
   },
 });

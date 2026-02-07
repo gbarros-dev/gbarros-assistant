@@ -1,68 +1,56 @@
-import { ConvexError } from "convex/values";
-
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 type Ctx = QueryCtx | MutationCtx;
 
 /**
- * Require an authenticated Clerk identity. Throws if the caller is not
- * authenticated.
+ * Check whether the caller provided a valid agent service key.
+ * If AGENT_SECRET is not configured on the backend (dev mode), always returns
+ * true. When it IS set, the caller must provide a matching key.
+ *
+ * Returns `true` if valid, `false` if rejected. Callers should return their
+ * "empty" response (null, false, []) on false — NOT throw — to avoid Sentry
+ * noise from expected rejections.
  */
-export async function requireIdentity(ctx: Ctx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    throw new ConvexError("Unauthorized");
-  }
-  return identity;
+export function isValidServiceKey(serviceKey?: string): boolean {
+	const expected = process.env.AGENT_SECRET;
+	if (!expected) return true;
+	return !!serviceKey && serviceKey === expected;
 }
 
 /**
- * Require an authenticated user. Resolves the Clerk identity to a user record.
- * Throws if not authenticated or if no matching user exists.
+ * Returns the authenticated user document, or `null` if the session is
+ * missing/expired or the user record doesn't exist yet.
+ *
+ * Use this in web-facing queries/mutations so that expected auth failures
+ * return empty results instead of generating Sentry noise.
  */
-export async function requireUser(ctx: Ctx): Promise<Doc<"users">> {
-  const identity = await requireIdentity(ctx);
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_externalId", (q) => q.eq("externalId", identity.subject))
-    .first();
-  if (!user) {
-    throw new ConvexError("User not found");
-  }
-  return user;
+export async function getAuthUser(ctx: Ctx): Promise<Doc<"users"> | null> {
+	const identity = await ctx.auth.getUserIdentity();
+	if (!identity) return null;
+	return await ctx.db
+		.query("users")
+		.withIndex("by_externalId", (q) => q.eq("externalId", identity.subject))
+		.first();
 }
 
 /**
- * Require that the authenticated user owns the given conversation.
- *
- * For web conversations, checks `conversation.userId`.
- * For WhatsApp conversations, checks via the linked contact's `userId`.
- *
- * Returns the conversation document on success.
+ * Returns the conversation if the authenticated user owns it, or `null`
+ * otherwise. Handles both web (userId match) and WhatsApp (contactId → userId)
+ * ownership patterns.
  */
-export async function requireConversationOwner(
-  ctx: Ctx,
-  conversationId: Id<"conversations">,
-): Promise<Doc<"conversations">> {
-  const user = await requireUser(ctx);
-  const conversation = await ctx.db.get(conversationId);
-  if (!conversation) {
-    throw new ConvexError("Conversation not found");
-  }
-
-  // Web conversation: direct userId match
-  if (conversation.userId && conversation.userId === user._id) {
-    return conversation;
-  }
-
-  // WhatsApp conversation: check if contact is linked to this user
-  if (conversation.contactId) {
-    const contact = await ctx.db.get(conversation.contactId);
-    if (contact && contact.userId === user._id) {
-      return conversation;
-    }
-  }
-
-  throw new ConvexError("Access denied");
+export async function getConversationIfOwner(
+	ctx: Ctx,
+	conversationId: Id<"conversations">,
+): Promise<Doc<"conversations"> | null> {
+	const user = await getAuthUser(ctx);
+	if (!user) return null;
+	const conversation = await ctx.db.get(conversationId);
+	if (!conversation) return null;
+	if (conversation.userId && conversation.userId === user._id) return conversation;
+	if (conversation.contactId) {
+		const contact = await ctx.db.get(conversation.contactId);
+		if (contact && contact.userId === user._id) return conversation;
+	}
+	return null;
 }
