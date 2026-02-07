@@ -16,7 +16,7 @@
     "clean": "git clean -xdf .cache .turbo node_modules convex/_generated"
   },
   "dependencies": {
-    "@clerk/backend": "^2.29.5",
+    "@clerk/backend": "^2.30.1",
     "convex": "catalog:",
     "svix": "^1.84.1"
   },
