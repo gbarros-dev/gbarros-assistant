@@ -13,6 +13,28 @@ import { filterTools, getDefaultPolicy, mergeToolPolicies } from "./tool-policy"
 import { tools } from "./tools";
 import { getWebSearchTool } from "./tools/web-search";
 
+/** Convert any remaining markdown syntax to WhatsApp-compatible formatting */
+function sanitizeForWhatsApp(text: string): string {
+  return (
+    text
+      // Convert **bold** → *bold* (double asterisks to single)
+      .replace(/\*\*(.+?)\*\*/g, "*$1*")
+      // Convert __bold__ → *bold*
+      .replace(/__(.+?)__/g, "*$1*")
+      // Convert markdown headers to bold lines
+      .replace(/^#{1,6}\s+(.+)$/gm, "*$1*")
+      // Convert [text](url) → text (url)
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
+      // Strip image syntax ![alt](url) → alt: url
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1: $2")
+      // Convert horizontal rules (---, ***) to a simple line
+      .replace(/^[-*_]{3,}$/gm, "───")
+      // Clean up any triple+ newlines to double
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+}
+
 export function startAgentLoop() {
   const client = getConvexClient();
   console.info("[agent] Starting agent loop — subscribing to pending jobs...");
@@ -146,18 +168,22 @@ export function startAgentLoop() {
           const response = await generateResponse(compactedMessages, context.skills, {
             toolsOverride: approvalTools,
             agentConfig,
+            channel,
           });
           modelUsed = response.modelUsed;
 
+          const content =
+            channel === "whatsapp" ? sanitizeForWhatsApp(response.content) : response.content;
+
           await client.mutation(api.messages.addAssistantMessage, {
             conversationId: job.conversationId,
-            content: response.content,
+            content,
             channel: context.conversation.channel,
             toolCalls: response.toolCalls,
           });
 
-          if (context.conversation.channel === "whatsapp" && context.contact?.phone) {
-            await sendWhatsAppMessage(context.contact.phone, response.content);
+          if (channel === "whatsapp" && context.contact?.phone) {
+            await sendWhatsAppMessage(context.contact.phone, content);
           }
         }
 

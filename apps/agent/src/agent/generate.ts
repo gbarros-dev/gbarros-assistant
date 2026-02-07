@@ -41,10 +41,39 @@ function getModel(name: string) {
   return gateway(name);
 }
 
-function buildSystemPrompt(skills?: Skill[], agentConfig?: AgentConfig): string {
+const WHATSAPP_FORMATTING_INSTRUCTIONS = `
+
+## Formatting Rules (WhatsApp)
+
+You are replying on WhatsApp. Follow these formatting rules strictly:
+- Use *bold* for emphasis (single asterisks, NOT double)
+- Use _italic_ for secondary emphasis (single underscores)
+- Use ~strikethrough~ for corrections
+- Use \`\`\`code\`\`\` for code blocks (triple backticks)
+- Use \`inline code\` for short code references
+- NEVER use markdown headers (# ## ###) — use *bold* text on its own line instead
+- NEVER use markdown links [text](url) — write the URL directly or say "text: url"
+- NEVER use markdown images ![alt](url)
+- Use simple bullet points with - or • characters
+- Keep numbered lists as plain "1. item" format
+- Keep messages concise — WhatsApp is a chat, not a document
+- Use line breaks to separate sections instead of headers
+- Avoid long paragraphs — break them into shorter chunks`;
+
+function buildSystemPrompt(
+  skills?: Skill[],
+  agentConfig?: AgentConfig,
+  channel?: "web" | "whatsapp",
+): string {
   const basePrompt = agentConfig?.systemPrompt ?? BASE_SYSTEM_PROMPT;
 
-  if (!skills || skills.length === 0) return basePrompt;
+  let prompt = basePrompt;
+
+  if (channel === "whatsapp") {
+    prompt += WHATSAPP_FORMATTING_INSTRUCTIONS;
+  }
+
+  if (!skills || skills.length === 0) return prompt;
 
   const skillsSection = skills
     .map((s) => {
@@ -54,7 +83,7 @@ function buildSystemPrompt(skills?: Skill[], agentConfig?: AgentConfig): string 
     })
     .join("\n\n");
 
-  return `${basePrompt}\n\n## Active Skills\n\n${skillsSection}`;
+  return `${prompt}\n\n## Active Skills\n\n${skillsSection}`;
 }
 
 function getDefaultTools(modelName: string): Record<string, Tool> {
@@ -71,6 +100,7 @@ export async function generateResponse(
     modelOverride?: string;
     toolsOverride?: Record<string, Tool>;
     agentConfig?: AgentConfig;
+    channel?: "web" | "whatsapp";
   },
 ): Promise<GenerateResult> {
   const primaryModel = options?.agentConfig?.model ?? options?.modelOverride ?? env.AI_MODEL;
@@ -83,7 +113,7 @@ export async function generateResponse(
       const m = getModel(modelName);
       const result = await generateText({
         model: m,
-        system: buildSystemPrompt(skills, options?.agentConfig),
+        system: buildSystemPrompt(skills, options?.agentConfig, options?.channel),
         messages: conversationMessages,
         tools: options?.toolsOverride ?? getDefaultTools(modelName),
         stopWhen: stepCountIs(10),
@@ -115,6 +145,7 @@ export async function generateResponseStreaming(
     modelOverride?: string;
     toolsOverride?: Record<string, Tool>;
     agentConfig?: AgentConfig;
+    channel?: "web" | "whatsapp";
   },
 ): Promise<GenerateResult> {
   const primaryModel = options?.agentConfig?.model ?? options?.modelOverride ?? env.AI_MODEL;
@@ -127,7 +158,7 @@ export async function generateResponseStreaming(
       const m = getModel(modelName);
       const streamResult = streamText({
         model: m,
-        system: buildSystemPrompt(skills, options?.agentConfig),
+        system: buildSystemPrompt(skills, options?.agentConfig, options?.channel),
         messages: conversationMessages,
         tools: options?.toolsOverride ?? getDefaultTools(modelName),
         stopWhen: stepCountIs(10),
