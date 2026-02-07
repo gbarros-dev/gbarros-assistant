@@ -4,8 +4,14 @@ import type { Tool } from "ai";
 import type { ConvexClient } from "convex/browser";
 
 import { getWebSearchTool } from "../tools/web-search";
-import { getPluginToolsByName, listBuiltinPlugins } from "./registry";
-import type { ResolvedPluginTools } from "./types";
+import { serializeManifest } from "./manifest";
+import {
+  type PluginRegistry,
+  getGlobalRegistry,
+  getPluginToolsByName,
+  listBuiltinPlugins,
+} from "./registry";
+import type { ActivationResult, ResolvedPluginTools, RuntimePlugin } from "./types";
 
 function filterByPolicy(
   tools: Record<string, Tool>,
@@ -21,6 +27,50 @@ function filterByPolicy(
   return out;
 }
 
+/**
+ * Discover and activate plugins into a registry.
+ * - Activates builtins first (deterministic order: alphabetical by name)
+ * - Additional sources can be passed for future extensibility
+ * - Invalid or conflicting plugins are skipped with diagnostics
+ * - Never throws — returns results for all plugins
+ */
+export function discoverAndActivate(
+  registry: PluginRegistry = getGlobalRegistry(),
+  additionalPlugins: RuntimePlugin[] = [],
+): ActivationResult[] {
+  const results: ActivationResult[] = [];
+
+  // Builtins first, sorted by name for deterministic order
+  const builtins = [...listBuiltinPlugins()].sort((a, b) => a.name.localeCompare(b.name));
+  for (const plugin of builtins) {
+    results.push(registry.activate(plugin));
+  }
+
+  // Additional plugins sorted by name
+  const extras = [...additionalPlugins].sort((a, b) => a.name.localeCompare(b.name));
+  for (const plugin of extras) {
+    results.push(registry.activate(plugin));
+  }
+
+  return results;
+}
+
+/** Persist activation diagnostics to Convex for operability. */
+export async function syncDiagnostics(
+  client: ConvexClient,
+  results: ActivationResult[],
+): Promise<void> {
+  await Promise.all(
+    results.map(async (result) => {
+      await client.mutation(api.plugins.upsertDiagnostics, {
+        name: result.pluginName,
+        diagnosticStatus: result.status,
+        diagnosticMessages: result.diagnostics,
+      });
+    }),
+  );
+}
+
 export async function syncBuiltinPluginDefinitions(client: ConvexClient): Promise<void> {
   const plugins = listBuiltinPlugins();
   await Promise.all(
@@ -30,9 +80,7 @@ export async function syncBuiltinPluginDefinitions(client: ConvexClient): Promis
         version: plugin.version,
         source: plugin.source,
         status: "active",
-        manifest: {
-          tools: Object.keys(plugin.tools),
-        },
+        manifest: serializeManifest(plugin.manifest),
       });
     }),
   );
