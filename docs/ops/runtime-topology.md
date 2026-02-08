@@ -6,16 +6,17 @@ This note is the source of truth for deciding how to run `apps/agent` in dev and
 
 - Keep a single codebase/workspace: `apps/agent`.
 - Run separate runtime instances by role (do not rely on one multipurpose process in production).
+- Keep agent and backend `AGENT_SECRET` values aligned; service-authenticated Convex endpoints fail closed in production when missing/mismatched.
 
 ## Roles and Purpose
 
-| Role | What it does | Scale guidance |
-| --- | --- | --- |
-| `core` | Subscribes to agent jobs and runs AI/tool execution | Can scale horizontally |
-| `whatsapp` | Owns WhatsApp connection, receives inbound messages, sends outbound queue | One active owner per `WHATSAPP_ACCOUNT_ID` |
-| `all` | Runs `core` + `whatsapp` in one process | Local/dev only |
-| `whatsapp-ingress` | WhatsApp receive path only | Advanced/debug usage |
-| `whatsapp-egress` | WhatsApp send path only | Advanced/debug usage |
+| Role               | What it does                                                              | Scale guidance                             |
+| ------------------ | ------------------------------------------------------------------------- | ------------------------------------------ |
+| `core`             | Subscribes to agent jobs and runs AI/tool execution                       | Can scale horizontally                     |
+| `whatsapp`         | Owns WhatsApp connection, receives inbound messages, sends outbound queue | One active owner per `WHATSAPP_ACCOUNT_ID` |
+| `all`              | Runs `core` + `whatsapp` in one process                                   | Local/dev only                             |
+| `whatsapp-ingress` | WhatsApp receive path only                                                | Advanced/debug usage                       |
+| `whatsapp-egress`  | WhatsApp send path only                                                   | Advanced/debug usage                       |
 
 ## Recommended Deployment Patterns
 
@@ -35,6 +36,7 @@ This note is the source of truth for deciding how to run `apps/agent` in dev and
 - The WhatsApp runtime uses Convex lease ownership (`whatsappLeases`) to prevent split-brain sending.
 - Only one worker should hold lease ownership for a given `WHATSAPP_ACCOUNT_ID`.
 - A second WhatsApp worker for the same account should stay in contention/retry and not send.
+- All service-to-Convex calls from workers should include `serviceKey` (`AGENT_SECRET`) on each request.
 
 ## When To Proceed (Go/No-Go Checklist)
 

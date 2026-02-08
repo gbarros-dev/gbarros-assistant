@@ -28,24 +28,24 @@ Verified against this repository on 2026-02-07.
 
 ### Root commands
 
-| Command                    | Description                                   |
-| -------------------------- | --------------------------------------------- |
-| `bun install`              | Install dependencies for all workspaces       |
-| `bun run build`            | Run Turborepo build pipeline                  |
-| `bun run lint`             | Oxlint at repo root                           |
-| `bun run lint:fix`         | Oxlint with autofix                           |
-| `bun run format`           | Oxfmt write mode                              |
-| `bun run format:check`     | Oxfmt check mode                              |
-| `bun run check`            | `oxlint && oxfmt --check`                     |
-| `bun run check:fix`        | `oxlint --fix && oxfmt --write`               |
-| `bun run typecheck`        | `turbo run typecheck`                         |
-| `bun run knip`             | `turbo run knip --continue`                   |
-| `bun run knip:fix`         | `turbo run knip:fix --continue`               |
-| `bun run static-analysis`  | lint + format check + typecheck + knip        |
-| `bun run test`             | Run Vitest in watch mode                      |
-| `bun run test:run`         | Run Vitest once                               |
-| `bun run clean`            | Destructive cleanup of root artifacts         |
-| `bun run clean:workspaces` | Run workspace `clean` scripts                 |
+| Command                    | Description                             |
+| -------------------------- | --------------------------------------- |
+| `bun install`              | Install dependencies for all workspaces |
+| `bun run build`            | Run Turborepo build pipeline            |
+| `bun run lint`             | Oxlint at repo root                     |
+| `bun run lint:fix`         | Oxlint with autofix                     |
+| `bun run format`           | Oxfmt write mode                        |
+| `bun run format:check`     | Oxfmt check mode                        |
+| `bun run check`            | `oxlint && oxfmt --check`               |
+| `bun run check:fix`        | `oxlint --fix && oxfmt --write`         |
+| `bun run typecheck`        | `turbo run typecheck`                   |
+| `bun run knip`             | `turbo run knip --continue`             |
+| `bun run knip:fix`         | `turbo run knip:fix --continue`         |
+| `bun run static-analysis`  | lint + format check + typecheck + knip  |
+| `bun run test`             | Run Vitest in watch mode                |
+| `bun run test:run`         | Run Vitest once                         |
+| `bun run clean`            | Destructive cleanup of root artifacts   |
+| `bun run clean:workspaces` | Run workspace `clean` scripts           |
 
 Important:
 
@@ -55,20 +55,20 @@ Important:
 
 ### Workspace dev/start commands
 
-| Workspace | Command                                                 | Notes |
-| --------- | ------------------------------------------------------- | ----- |
-| backend   | `cd apps/backend && bun run dev`                        | Starts Convex dev server |
-| backend   | `cd apps/backend && bun run dev:setup`                  | First-time Convex bootstrap/configure |
-| web       | `cd apps/web && bun run dev`                            | Next.js dev server (default port 3000 unless `PORT` is set) |
-| agent     | `cd apps/agent && bun run dev`                          | Watch mode, default role `all` |
-| agent     | `cd apps/agent && bun run dev:core`                     | Watch mode, core processing only |
-| agent     | `cd apps/agent && bun run dev:whatsapp`                 | Watch mode, WhatsApp runtime (no core loop) |
-| agent     | `cd apps/agent && bun run dev:whatsapp-ingress`         | Watch mode, WhatsApp ingress only |
-| agent     | `cd apps/agent && bun run dev:whatsapp-egress`          | Watch mode, WhatsApp egress only |
-| agent     | `cd apps/agent && bun run start:core`                   | Non-watch core mode |
-| agent     | `cd apps/agent && bun run start:whatsapp`               | Non-watch WhatsApp mode |
-| agent     | `cd apps/agent && bun run start:whatsapp-ingress`       | Non-watch ingress mode |
-| agent     | `cd apps/agent && bun run start:whatsapp-egress`        | Non-watch egress mode |
+| Workspace | Command                                           | Notes                                                       |
+| --------- | ------------------------------------------------- | ----------------------------------------------------------- |
+| backend   | `cd apps/backend && bun run dev`                  | Starts Convex dev server                                    |
+| backend   | `cd apps/backend && bun run dev:setup`            | First-time Convex bootstrap/configure                       |
+| web       | `cd apps/web && bun run dev`                      | Next.js dev server (default port 3000 unless `PORT` is set) |
+| agent     | `cd apps/agent && bun run dev`                    | Watch mode, default role `all`                              |
+| agent     | `cd apps/agent && bun run dev:core`               | Watch mode, core processing only                            |
+| agent     | `cd apps/agent && bun run dev:whatsapp`           | Watch mode, WhatsApp runtime (no core loop)                 |
+| agent     | `cd apps/agent && bun run dev:whatsapp-ingress`   | Watch mode, WhatsApp ingress only                           |
+| agent     | `cd apps/agent && bun run dev:whatsapp-egress`    | Watch mode, WhatsApp egress only                            |
+| agent     | `cd apps/agent && bun run start:core`             | Non-watch core mode                                         |
+| agent     | `cd apps/agent && bun run start:whatsapp`         | Non-watch WhatsApp mode                                     |
+| agent     | `cd apps/agent && bun run start:whatsapp-ingress` | Non-watch ingress mode                                      |
+| agent     | `cd apps/agent && bun run start:whatsapp-egress`  | Non-watch egress mode                                       |
 
 ## Validation Expectations
 
@@ -154,6 +154,16 @@ zenthor-assist/
 - Crons in `apps/backend/convex/crons.ts` handle stale-job requeue, scheduled-task processing, and cleanup jobs.
 - Convex-generated files are under `apps/backend/convex/_generated` and should not be manually edited.
 
+#### Auth Wrapper Contract
+
+- Public Convex endpoints should use wrappers from `apps/backend/convex/auth/`:
+  - `authQuery` / `authMutation`: authenticated end-user access
+  - `adminQuery` / `adminMutation`: admin-only access
+  - `serviceQuery` / `serviceMutation`: trusted runtime/service access (agent/worker callers)
+- Raw public `query`/`mutation` builders should only be used for explicitly public/bootstrapping endpoints.
+- Service wrappers validate `serviceKey` against backend `AGENT_SECRET` and fail closed in production when the secret is missing or mismatched.
+- User role is stored in `users.role` (`admin | member`) and can be derived from `ADMIN_EMAIL_ALLOWLIST` for initial assignment/backfill.
+
 ### Agent (`apps/agent`)
 
 - Entry point: `apps/agent/src/index.ts`.
@@ -198,6 +208,7 @@ Convex queries → useConvexMessages(conversationId) → { messages, isProcessin
 ```
 
 Key rules:
+
 - `Message from={role}` matches our schema: `"user" | "assistant" | "system"`.
 - `MessageResponse` handles assistant markdown rendering.
 - Tool calls use `ToolHeader type="dynamic-tool" toolName={name}`.
@@ -211,10 +222,12 @@ Use `.env.local` files per app (gitignored) and Convex dashboard env for deploye
 ### Web env (`@zenthor-assist/env/web`)
 
 Required:
+
 - `NEXT_PUBLIC_CONVEX_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 
 Optional observability:
+
 - `AXIOM_TOKEN`
 - `AXIOM_DATASET`
 - `OBS_ENABLED`
@@ -225,10 +238,12 @@ Optional observability:
 ### Agent env (`@zenthor-assist/env/agent`)
 
 Required:
+
 - `CONVEX_URL`
 - `AI_GATEWAY_API_KEY`
 
 Key optional:
+
 - `AI_MODEL` (default `anthropic/claude-sonnet-4-20250514`)
 - `AI_FALLBACK_MODEL`
 - `AI_CONTEXT_WINDOW`
@@ -259,9 +274,15 @@ Key optional:
 ### Backend/Convex env
 
 Required by current code:
+
 - `CLERK_JWT_ISSUER_DOMAIN` (`auth.config.ts`)
 - `CLERK_WEBHOOK_SECRET` (`clerk/http.ts`)
 - `CLERK_SECRET_KEY` (`clerk/sync.ts`)
+
+Auth/RBAC env:
+
+- `AGENT_SECRET` (required in production for `serviceQuery`/`serviceMutation` calls)
+- `ADMIN_EMAIL_ALLOWLIST` (optional comma-separated emails used to default `users.role=admin`)
 
 ## TypeScript and Style Rules
 

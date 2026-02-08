@@ -54,6 +54,12 @@ cd apps/agent && bun run dev:core
 - Schema in `apps/backend/convex/schema.ts`.
 - HTTP router in `apps/backend/convex/http.ts` exposes Clerk webhook at `/clerk/webhook`.
 - Cron orchestration in `apps/backend/convex/crons.ts` handles stale-job requeue, scheduled tasks, and cleanups.
+- Public function auth wrappers are in `apps/backend/convex/auth/`:
+  - `authQuery` / `authMutation` for authenticated users
+  - `adminQuery` / `adminMutation` for admin-only operations
+  - `serviceQuery` / `serviceMutation` for trusted service callers (agent runtime)
+- Service wrappers validate `serviceKey` against backend `AGENT_SECRET` and fail closed in production if missing/mismatched.
+- `users.role` is `admin | member`; optional `ADMIN_EMAIL_ALLOWLIST` is used to default admin role assignments.
 
 ### Agent notes
 
@@ -73,20 +79,24 @@ cd apps/agent && bun run dev:core
 ### Web (`@zenthor-assist/env/web`)
 
 Required:
+
 - `NEXT_PUBLIC_CONVEX_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 
 Optional:
+
 - `AXIOM_TOKEN`, `AXIOM_DATASET`
 - `OBS_ENABLED`, `OBS_SAMPLE_RATE`, `OBS_LOG_LEVEL`, `OBS_INCLUDE_CONTENT`
 
 ### Agent (`@zenthor-assist/env/agent`)
 
 Required:
+
 - `CONVEX_URL`
 - `AI_GATEWAY_API_KEY`
 
 Common optional:
+
 - `AI_MODEL`, `AI_FALLBACK_MODEL`, `AI_CONTEXT_WINDOW`, `AI_EMBEDDING_MODEL`
 - `AGENT_ROLE`, `ENABLE_WHATSAPP`, `WORKER_ID`
 - `AGENT_JOB_LOCK_MS`, `AGENT_JOB_HEARTBEAT_MS`
@@ -100,6 +110,8 @@ Common optional:
 - `CLERK_JWT_ISSUER_DOMAIN`
 - `CLERK_WEBHOOK_SECRET`
 - `CLERK_SECRET_KEY`
+- `AGENT_SECRET` (required in production for service-wrapper endpoints)
+- `ADMIN_EMAIL_ALLOWLIST` (optional comma-separated admin emails)
 
 ## File Safety
 

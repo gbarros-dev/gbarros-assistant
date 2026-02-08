@@ -23,6 +23,11 @@ Expected signal:
 
 - `Convex functions ready!`
 
+Service auth precondition:
+
+- Set backend `AGENT_SECRET` in Convex env and set the same value as `AGENT_SECRET` in the agent runtime env.
+- In production, service-authenticated Convex endpoints reject requests when this secret is missing or mismatched.
+
 ## 2) Start AI Core Worker
 
 From `apps/agent`:
@@ -120,15 +125,18 @@ AGENT_ROLE=whatsapp WORKER_ID=wa-2 ENABLE_WHATSAPP=true WHATSAPP_ACCOUNT_ID=defa
 **Action**: Send SIGTERM to the primary worker (Ctrl+C in Terminal 1).
 
 **Expected signals (Terminal 1 / wa-1)**:
+
 - Axiom event: `whatsapp.lease.released` with `{ accountId: "default", ownerId: "wa-1" }`
 - Process exits cleanly.
 
 **Expected signals (Terminal 2 / wa-2)**:
+
 - Logs: `[whatsapp] Lease acquired for account 'default' by 'wa-2'`
 - Axiom event: `whatsapp.lease.acquire.success` with `{ accountId: "default", ownerId: "wa-2" }`
 - Worker connects to WhatsApp and starts outbound loop.
 
 **Verification**:
+
 ```bash
 bunx convex run whatsappLeases.getLease '{"accountId":"default"}'
 # Expected: ownerId == "wa-2", expiresAt in the future
@@ -145,11 +153,13 @@ Validates that a crashed worker's lease expires and a standby takes over after T
 **Setup**: Same as scenario E — two workers running.
 
 **Action**: Force-kill the primary worker (simulates crash):
+
 ```bash
 kill -9 <pid-of-wa-1>
 ```
 
 **Expected signals (Terminal 2 / wa-2)**:
+
 - Worker stays in contention loop logging `[whatsapp] Lease held by 'wa-1'...` until lease TTL expires.
 - After TTL expiry (default 45s): `[whatsapp] Lease acquired for account 'default' by 'wa-2'`
 - Axiom event: `whatsapp.lease.acquire.success`
@@ -157,6 +167,7 @@ kill -9 <pid-of-wa-1>
 **Timing**: Handoff should complete within `WHATSAPP_LEASE_TTL_MS` (default 45s) + one contention retry cycle (3s).
 
 **Verification**:
+
 ```bash
 bunx convex run whatsappLeases.getLease '{"accountId":"default"}'
 # Expected: ownerId == "wa-2"
@@ -175,10 +186,12 @@ Validates that the heartbeat interval prevents lease expiry during normal operat
 **Action**: Let the worker run for at least 2 minutes while sending/receiving messages.
 
 **Expected signals**:
+
 - No `whatsapp.lease.heartbeat.lost` events in Axiom.
 - Lease `expiresAt` continuously moves forward (check with repeated `getLease` calls).
 
 **Verification**:
+
 ```bash
 # Run twice, ~30s apart
 bunx convex run whatsappLeases.getLease '{"accountId":"default"}'
@@ -186,6 +199,7 @@ bunx convex run whatsappLeases.getLease '{"accountId":"default"}'
 ```
 
 **If it fails**: If `whatsapp.lease.heartbeat.lost` appears, check for:
+
 1. Network issues between worker and Convex.
 2. `WHATSAPP_HEARTBEAT_MS` set too high relative to `WHATSAPP_LEASE_TTL_MS` (heartbeat should be significantly shorter than TTL, e.g. 15s heartbeat with 45s TTL).
 
@@ -200,6 +214,7 @@ Validates that only the lease holder sends outbound messages.
 **Action**: Send a WhatsApp message from an allowed contact that triggers an AI response.
 
 **Expected signals**:
+
 - Only the active lease holder emits `whatsapp.outbound.sent`.
 - The contending worker does NOT emit any `whatsapp.outbound.sent` events.
 - Only one response is received on the phone.
@@ -225,6 +240,7 @@ AGENT_ROLE=whatsapp WHATSAPP_AUTH_MODE=convex WORKER_ID=wa-1 ENABLE_WHATSAPP=tru
 **Step 2**: Stop the worker (Ctrl+C).
 
 **Step 3**: Verify session is persisted:
+
 ```bash
 bunx convex run whatsappSession.getAll
 # Expected: Multiple entries (creds, app-state-sync-key-*, etc.)
@@ -233,12 +249,14 @@ bunx convex run whatsappSession.getAll
 **Step 4**: Restart the worker with the same command.
 
 **Expected signals on restart**:
+
 - Worker logs: `[whatsapp] Auth mode: convex`
 - Worker connects WITHOUT showing a new QR code.
 - Logs: `[whatsapp] Connected successfully`
 - Axiom event: `whatsapp.connection.established`
 
 **If it fails (QR code shown again)**:
+
 - Auth state was lost or corrupted. Check `whatsappSession` table for entries.
 - If entries exist but are corrupt, clear and re-link: see `docs/ops/incidents.md` section 4.
 
@@ -257,6 +275,7 @@ AGENT_ROLE=whatsapp WHATSAPP_AUTH_MODE=local WORKER_ID=wa-1 ENABLE_WHATSAPP=true
 **Step 1**: Let the worker connect (scan QR if first time).
 
 **Step 2**: Verify auth directory exists:
+
 ```bash
 ls apps/agent/.whatsapp-auth/
 # Expected: creds.json, app-state-sync-key-*.json, etc.
@@ -302,15 +321,15 @@ bunx convex run whatsappSession.getAll
 
 Before production rollout, confirm all pass:
 
-| # | Scenario | Status |
-|---|----------|--------|
-| A | Web chat works | |
-| B | WhatsApp end-to-end works | |
-| C | Lease protection (no split-brain) | |
-| D | Core-only mode does not send WhatsApp | |
-| E | Graceful owner handoff (SIGTERM) | |
-| F | Crash recovery (kill -9) | |
-| G | Heartbeat keeps lease alive under load | |
-| H | Lease contention does not cause duplicate sends | |
-| I | Convex auth persistence | |
-| J | Local auth persistence | |
+| #   | Scenario                                        | Status |
+| --- | ----------------------------------------------- | ------ |
+| A   | Web chat works                                  |        |
+| B   | WhatsApp end-to-end works                       |        |
+| C   | Lease protection (no split-brain)               |        |
+| D   | Core-only mode does not send WhatsApp           |        |
+| E   | Graceful owner handoff (SIGTERM)                |        |
+| F   | Crash recovery (kill -9)                        |        |
+| G   | Heartbeat keeps lease alive under load          |        |
+| H   | Lease contention does not cause duplicate sends |        |
+| I   | Convex auth persistence                         |        |
+| J   | Local auth persistence                          |        |

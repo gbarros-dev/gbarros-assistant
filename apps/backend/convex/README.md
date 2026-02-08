@@ -18,6 +18,20 @@ Core function modules:
 - `toolApprovals.ts`: Approval requests and resolution state.
 - `plugins.ts`: Plugin definitions/installs/policy APIs.
 
+## Auth Wrappers
+
+Public Convex functions should use wrappers from `./auth/`:
+
+- `authQuery` / `authMutation`: authenticated end-user access.
+- `adminQuery` / `adminMutation`: admin-only access.
+- `serviceQuery` / `serviceMutation`: trusted service/runtime access.
+
+Notes:
+
+- Service wrappers require `serviceKey` and validate against backend `AGENT_SECRET`.
+- In production, service auth fails closed if `AGENT_SECRET` is missing.
+- User role is stored as `users.role` (`admin | member`), with optional defaulting via `ADMIN_EMAIL_ALLOWLIST`.
+
 ## Local Development
 
 From `apps/backend`:
@@ -35,6 +49,8 @@ bun run dev
 - `CLERK_JWT_ISSUER_DOMAIN`
 - `CLERK_WEBHOOK_SECRET`
 - `CLERK_SECRET_KEY`
+- `AGENT_SECRET` (required in production for service wrappers)
+- `ADMIN_EMAIL_ALLOWLIST` (optional comma-separated admin emails)
 
 ## Important Safety Rules
 

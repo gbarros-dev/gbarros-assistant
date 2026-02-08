@@ -33,18 +33,30 @@ bun run dev:setup
 ```
 
 3. Set environment variables:
+
 - Web (`apps/web/.env.local`):
   - `NEXT_PUBLIC_CONVEX_URL`
   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - Agent (`apps/agent/.env.local`):
   - `CONVEX_URL`
   - `AI_GATEWAY_API_KEY`
+  - `AGENT_SECRET` (must match backend `AGENT_SECRET` for service-authenticated calls)
 - Convex Dashboard env:
   - `CLERK_JWT_ISSUER_DOMAIN`
   - `CLERK_WEBHOOK_SECRET`
   - `CLERK_SECRET_KEY`
+  - `AGENT_SECRET` (required in production for service endpoints)
+  - `ADMIN_EMAIL_ALLOWLIST` (optional comma-separated admin emails)
 
-4. Start local services (separate terminals):
+4. Auth model notes:
+
+- Backend public function wrappers use three modes:
+  - `authQuery` / `authMutation`: authenticated user access
+  - `adminQuery` / `adminMutation`: admin-only access
+  - `serviceQuery` / `serviceMutation`: trusted runtime/service access (requires `AGENT_SECRET`)
+- Raw public `query`/`mutation` should be reserved for explicit public/bootstrapping paths only.
+
+5. Start local services (separate terminals):
 
 ```bash
 # Terminal 1
