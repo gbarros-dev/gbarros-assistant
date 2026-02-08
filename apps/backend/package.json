@@ -31,7 +31,8 @@
       "knip"
     ],
     "ignore": [
-      "convex/agent_queue_helpers.ts"
+      "convex/agent_queue_helpers.ts",
+      "convex/**/*.test.ts"
     ]
   }
 }
