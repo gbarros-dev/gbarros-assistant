@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 
 import { internal } from "./_generated/api";
-import { action, internalMutation, internalQuery, query } from "./_generated/server";
+import { action, internalMutation, internalQuery } from "./_generated/server";
+import { serviceQuery } from "./auth";
 
 const memoryDoc = v.object({
   _id: v.id("memories"),
@@ -13,7 +14,7 @@ const memoryDoc = v.object({
   createdAt: v.number(),
 });
 
-export const listByConversation = query({
+export const listByConversation = serviceQuery({
   args: { conversationId: v.id("conversations") },
   returns: v.array(memoryDoc),
   handler: async (ctx, args) => {
@@ -48,6 +49,7 @@ export const removeMemory = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.delete(args.memoryId);
+    return null;
   },
 });
 

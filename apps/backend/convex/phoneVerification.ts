@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
-import { internalMutation, mutation, query } from "./_generated/server";
-import { getAuthUser } from "./lib/auth";
+import { internalMutation } from "./_generated/server";
+import { authMutation, authQuery } from "./auth";
 
 const VERIFICATION_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const CLEANUP_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -10,15 +10,13 @@ function generateCode(): string {
   return Math.floor(100_000 + Math.random() * 900_000).toString();
 }
 
-export const requestVerification = mutation({
+export const requestVerification = authMutation({
   args: {
     phone: v.string(),
   },
   returns: v.object({ success: v.boolean(), error: v.optional(v.string()) }),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return { success: false, error: "Not authenticated" };
-
+    const user = ctx.auth.user;
     // Validate phone format: digits only, 10-15 chars
     if (!/^\d{10,15}$/.test(args.phone)) {
       return { success: false, error: "Invalid phone number format" };
@@ -124,7 +122,7 @@ export const requestVerification = mutation({
   },
 });
 
-export const confirmVerification = mutation({
+export const confirmVerification = authMutation({
   args: {
     code: v.string(),
   },
@@ -134,8 +132,7 @@ export const confirmVerification = mutation({
     error: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return { success: false, error: "Not authenticated" };
+    const user = ctx.auth.user;
 
     const pending = await ctx.db
       .query("phoneVerifications")
@@ -178,7 +175,7 @@ export const confirmVerification = mutation({
   },
 });
 
-export const getVerificationStatus = query({
+export const getVerificationStatus = authQuery({
   args: {},
   returns: v.union(
     v.object({
@@ -188,8 +185,7 @@ export const getVerificationStatus = query({
     v.null(),
   ),
   handler: async (ctx) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return null;
+    const user = ctx.auth.user;
 
     const pending = await ctx.db
       .query("phoneVerifications")
@@ -207,12 +203,11 @@ export const getVerificationStatus = query({
   },
 });
 
-export const unlinkPhone = mutation({
+export const unlinkPhone = authMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return null;
+    const user = ctx.auth.user;
     const { phone } = user;
     if (!phone) return null;
 

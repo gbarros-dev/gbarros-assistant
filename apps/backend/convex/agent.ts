@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import {
   canRetry,
   DEFAULT_JOB_LOCK_MS,
@@ -9,7 +9,8 @@ import {
   isJobStale,
   resolveStaleAction,
 } from "./agent_queue_helpers";
-import { getConversationIfOwner, isValidServiceKey } from "./lib/auth";
+import { authQuery, serviceMutation, serviceQuery } from "./auth";
+import { getConversationIfOwnedByUser } from "./lib/auth";
 
 const agentQueueDoc = v.object({
   _id: v.id("agentQueue"),
@@ -77,6 +78,7 @@ const userDoc = v.object({
   externalId: v.string(),
   name: v.string(),
   email: v.string(),
+  role: v.optional(v.union(v.literal("admin"), v.literal("member"))),
   emailVerified: v.optional(v.boolean()),
   image: v.optional(v.string()),
   phone: v.optional(v.string()),
@@ -122,11 +124,10 @@ const messageDoc = v.object({
   ),
 });
 
-export const getPendingJobs = query({
-  args: { serviceKey: v.optional(v.string()) },
+export const getPendingJobs = serviceQuery({
+  args: {},
   returns: v.array(agentQueueDoc),
-  handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return [];
+  handler: async (ctx) => {
     return await ctx.db
       .query("agentQueue")
       .withIndex("by_status", (q) => q.eq("status", "pending"))
@@ -134,16 +135,14 @@ export const getPendingJobs = query({
   },
 });
 
-export const claimJob = mutation({
+export const claimJob = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     jobId: v.id("agentQueue"),
     processorId: v.string(),
     lockMs: v.optional(v.number()),
   },
   returns: v.union(agentQueueDoc, v.null()),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     const job = await ctx.db.get(args.jobId);
     if (!job || job.status !== "pending") return null;
 
@@ -199,15 +198,13 @@ export const claimJob = mutation({
   },
 });
 
-export const completeJob = mutation({
+export const completeJob = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     jobId: v.id("agentQueue"),
     modelUsed: v.optional(v.string()),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return false;
     const job = await ctx.db.get(args.jobId);
     if (!job || job.status !== "processing") return false;
 
@@ -221,16 +218,14 @@ export const completeJob = mutation({
   },
 });
 
-export const failJob = mutation({
+export const failJob = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     jobId: v.id("agentQueue"),
     errorReason: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return false;
     const job = await ctx.db.get(args.jobId);
     if (!job || job.status !== "processing") return false;
 
@@ -245,11 +240,10 @@ export const failJob = mutation({
   },
 });
 
-export const retryJob = mutation({
-  args: { serviceKey: v.optional(v.string()), jobId: v.id("agentQueue") },
+export const retryJob = serviceMutation({
+  args: { jobId: v.id("agentQueue") },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return false;
     const job = await ctx.db.get(args.jobId);
     if (!job) return false;
     if (!canRetry(job.attemptCount)) return false;
@@ -267,16 +261,14 @@ export const retryJob = mutation({
   },
 });
 
-export const heartbeatJob = mutation({
+export const heartbeatJob = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     jobId: v.id("agentQueue"),
     processorId: v.string(),
     lockMs: v.optional(v.number()),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return false;
     const job = await ctx.db.get(args.jobId);
     if (!job) return false;
     if (!isHeartbeatValid(job, args.processorId, Date.now())) return false;
@@ -324,14 +316,15 @@ export const requeueStaleJobs = internalMutation({
         });
       }
     }
+    return null;
   },
 });
 
-export const isProcessing = query({
+export const isProcessing = authQuery({
   args: { conversationId: v.id("conversations") },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const conv = await getConversationIfOwner(ctx, args.conversationId);
+    const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, args.conversationId);
     if (!conv) return false;
     const jobs = await ctx.db
       .query("agentQueue")
@@ -341,8 +334,8 @@ export const isProcessing = query({
   },
 });
 
-export const getConversationContext = query({
-  args: { serviceKey: v.optional(v.string()), conversationId: v.id("conversations") },
+export const getConversationContext = serviceQuery({
+  args: { conversationId: v.id("conversations") },
   returns: v.union(
     v.object({
       conversation: conversationDoc,
@@ -355,7 +348,6 @@ export const getConversationContext = query({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) return null;
 

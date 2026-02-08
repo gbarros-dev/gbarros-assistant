@@ -1,17 +1,11 @@
 import { v } from "convex/values";
 
-import { query } from "./_generated/server";
+import { authQuery } from "./auth";
 
-export const get = query({
+export const get = authQuery({
   args: {},
   returns: v.object({ message: v.string() }),
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity === null) {
-      return {
-        message: "Not authenticated",
-      };
-    }
+  handler: async () => {
     return {
       message: "This is private",
     };

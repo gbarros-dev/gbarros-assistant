@@ -1,7 +1,7 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
-import { getAuthUser } from "./lib/auth";
+import { mutation } from "./_generated/server";
+import { adminQuery, authQuery, resolveRoleForEmail } from "./auth";
 
 const userDoc = v.object({
   _id: v.id("users"),
@@ -9,6 +9,7 @@ const userDoc = v.object({
   externalId: v.string(),
   name: v.string(),
   email: v.string(),
+  role: v.optional(v.union(v.literal("admin"), v.literal("member"))),
   emailVerified: v.optional(v.boolean()),
   image: v.optional(v.string()),
   phone: v.optional(v.string()),
@@ -17,12 +18,11 @@ const userDoc = v.object({
   updatedAt: v.number(),
 });
 
-export const getByExternalId = query({
+export const getByExternalId = authQuery({
   args: { externalId: v.string() },
   returns: v.union(userDoc, v.null()),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity || identity.subject !== args.externalId) return null;
+    if (ctx.auth.identitySubject !== args.externalId) return null;
     return await ctx.db
       .query("users")
       .withIndex("by_externalId", (q) => q.eq("externalId", args.externalId))
@@ -39,21 +39,30 @@ export const getOrCreateFromClerk = mutation({
   returns: v.union(v.id("users"), v.null()),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
+    if (!identity) {
+      throw new ConvexError("Not authenticated");
+    }
     const externalId = identity.subject;
+    const role = resolveRoleForEmail(args.email);
 
     const existing = await ctx.db
       .query("users")
       .withIndex("by_externalId", (q) => q.eq("externalId", externalId))
       .first();
 
-    if (existing) return existing._id;
+    if (existing) {
+      if (!existing.role) {
+        await ctx.db.patch(existing._id, { role, updatedAt: Date.now() });
+      }
+      return existing._id;
+    }
 
     const now = Date.now();
     return await ctx.db.insert("users", {
       externalId,
       name: args.name,
       email: args.email ?? "",
+      role,
       image: args.image,
       status: "active",
       createdAt: now,
@@ -62,34 +71,26 @@ export const getOrCreateFromClerk = mutation({
   },
 });
 
-export const getCurrentUser = query({
+export const getCurrentUser = authQuery({
   args: {},
   returns: v.union(userDoc, v.null()),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-
-    return await ctx.db
-      .query("users")
-      .withIndex("by_externalId", (q) => q.eq("externalId", identity.subject))
-      .first();
+    return ctx.auth.user;
   },
 });
 
-export const me = query({
+export const me = authQuery({
   args: {},
   returns: v.union(userDoc, v.null()),
   handler: async (ctx) => {
-    return await getAuthUser(ctx);
+    return ctx.auth.user;
   },
 });
 
-export const list = query({
+export const list = adminQuery({
   args: {},
   returns: v.array(userDoc),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
     return await ctx.db.query("users").collect();
   },
 });

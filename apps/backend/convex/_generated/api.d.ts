@@ -11,6 +11,9 @@
 import type * as agent from "../agent.js";
 import type * as agent_queue_helpers from "../agent_queue_helpers.js";
 import type * as agents from "../agents.js";
+import type * as auth_helpers from "../auth/helpers.js";
+import type * as auth_index from "../auth/index.js";
+import type * as auth_wrappers from "../auth/wrappers.js";
 import type * as clerk_http from "../clerk/http.js";
 import type * as clerk_sync from "../clerk/sync.js";
 import type * as clerk_webhooks from "../clerk/webhooks.js";
@@ -24,6 +27,7 @@ import type * as inboundDedupe from "../inboundDedupe.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as memories from "../memories.js";
 import type * as messages from "../messages.js";
+import type * as migrations from "../migrations.js";
 import type * as phoneVerification from "../phoneVerification.js";
 import type * as plugins from "../plugins.js";
 import type * as privateData from "../privateData.js";
@@ -44,6 +48,9 @@ declare const fullApi: ApiFromModules<{
   agent: typeof agent;
   agent_queue_helpers: typeof agent_queue_helpers;
   agents: typeof agents;
+  "auth/helpers": typeof auth_helpers;
+  "auth/index": typeof auth_index;
+  "auth/wrappers": typeof auth_wrappers;
   "clerk/http": typeof clerk_http;
   "clerk/sync": typeof clerk_sync;
   "clerk/webhooks": typeof clerk_webhooks;
@@ -57,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   memories: typeof memories;
   messages: typeof messages;
+  migrations: typeof migrations;
   phoneVerification: typeof phoneVerification;
   plugins: typeof plugins;
   privateData: typeof privateData;

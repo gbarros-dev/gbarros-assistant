@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
-import { getAuthUser, getConversationIfOwner, isValidServiceKey } from "./lib/auth";
+import { authMutation, authQuery, serviceMutation } from "./auth";
+import { getConversationIfOwnedByUser } from "./lib/auth";
 
 const conversationDoc = v.object({
   _id: v.id("conversations"),
@@ -14,17 +14,15 @@ const conversationDoc = v.object({
   status: v.union(v.literal("active"), v.literal("archived")),
 });
 
-export const getOrCreate = mutation({
+export const getOrCreate = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     userId: v.optional(v.id("users")),
     contactId: v.optional(v.id("contacts")),
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
     agentId: v.optional(v.id("agents")),
   },
-  returns: v.union(v.id("conversations"), v.null()),
+  returns: v.id("conversations"),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     if (args.channel === "web" && args.userId) {
       const existing = await ctx.db
         .query("conversations")
@@ -65,37 +63,33 @@ export const getOrCreate = mutation({
   },
 });
 
-export const listByUser = query({
+export const listByUser = authQuery({
   args: {},
   returns: v.array(conversationDoc),
   handler: async (ctx) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return [];
     return await ctx.db
       .query("conversations")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .withIndex("by_userId", (q) => q.eq("userId", ctx.auth.user._id))
       .collect();
   },
 });
 
-export const get = query({
+export const get = authQuery({
   args: { id: v.id("conversations") },
   returns: v.union(conversationDoc, v.null()),
   handler: async (ctx, args) => {
-    return await getConversationIfOwner(ctx, args.id);
+    return await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, args.id);
   },
 });
 
-export const create = mutation({
+export const create = authMutation({
   args: {
     title: v.optional(v.string()),
   },
-  returns: v.union(v.id("conversations"), v.null()),
+  returns: v.id("conversations"),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return null;
     return await ctx.db.insert("conversations", {
-      userId: user._id,
+      userId: ctx.auth.user._id,
       channel: "web",
       status: "active",
       title: args.title ?? "New chat",
@@ -103,30 +97,30 @@ export const create = mutation({
   },
 });
 
-export const archive = mutation({
+export const archive = authMutation({
   args: { id: v.id("conversations") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const conv = await getConversationIfOwner(ctx, args.id);
+    const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, args.id);
     if (!conv || conv.channel === "whatsapp") return null;
     await ctx.db.patch(args.id, { status: "archived" });
   },
 });
 
-export const updateTitle = mutation({
+export const updateTitle = authMutation({
   args: {
     id: v.id("conversations"),
     title: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const conv = await getConversationIfOwner(ctx, args.id);
+    const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, args.id);
     if (!conv) return null;
     await ctx.db.patch(args.id, { title: args.title });
   },
 });
 
-export const listRecentWithLastMessage = query({
+export const listRecentWithLastMessage = authQuery({
   args: {},
   returns: v.array(
     v.object({
@@ -149,20 +143,17 @@ export const listRecentWithLastMessage = query({
     }),
   ),
   handler: async (ctx) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return [];
-
     // 1. Web conversations by userId
     const webConversations = await ctx.db
       .query("conversations")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .withIndex("by_userId", (q) => q.eq("userId", ctx.auth.user._id))
       .filter((q) => q.eq(q.field("status"), "active"))
       .collect();
 
     // 2. WhatsApp conversations via linked contacts
     const linkedContacts = await ctx.db
       .query("contacts")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .withIndex("by_userId", (q) => q.eq("userId", ctx.auth.user._id))
       .collect();
 
     const whatsappConversations = (

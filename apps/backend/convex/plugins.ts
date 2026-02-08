@@ -2,8 +2,7 @@ import { v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
-import { getAuthUser, isValidServiceKey } from "./lib/auth";
+import { adminMutation, adminQuery, serviceMutation, serviceQuery } from "./auth";
 
 const channelValidator = v.union(v.literal("web"), v.literal("whatsapp"));
 
@@ -82,39 +81,32 @@ async function getScopedPolicies(
     .collect();
 }
 
-export const listDefinitions = query({
+export const listDefinitions = adminQuery({
   args: {},
   returns: v.array(pluginDefinitionDoc),
   handler: async (ctx) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return [];
     return await ctx.db.query("pluginDefinitions").collect();
   },
 });
 
-export const listInstalls = query({
+export const listInstalls = adminQuery({
   args: {},
   returns: v.array(pluginInstallDoc),
   handler: async (ctx) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return [];
     return await ctx.db.query("pluginInstalls").collect();
   },
 });
 
-export const listPolicies = query({
+export const listPolicies = adminQuery({
   args: {},
   returns: v.array(pluginPolicyDoc),
   handler: async (ctx) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return [];
     return await ctx.db.query("pluginPolicies").collect();
   },
 });
 
-export const upsertDefinition = mutation({
+export const upsertDefinition = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     name: v.string(),
     version: v.string(),
     source: v.string(),
@@ -122,9 +114,8 @@ export const upsertDefinition = mutation({
     manifest: v.any(),
     checksum: v.optional(v.string()),
   },
-  returns: v.union(v.id("pluginDefinitions"), v.null()),
+  returns: v.id("pluginDefinitions"),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     const now = Date.now();
     const existing = await ctx.db
       .query("pluginDefinitions")
@@ -156,7 +147,7 @@ export const upsertDefinition = mutation({
   },
 });
 
-export const upsertInstall = mutation({
+export const upsertInstall = adminMutation({
   args: {
     workspaceScope: v.string(),
     agentId: v.optional(v.id("agents")),
@@ -165,10 +156,8 @@ export const upsertInstall = mutation({
     enabled: v.boolean(),
     config: v.optional(v.any()),
   },
-  returns: v.union(v.id("pluginInstalls"), v.null()),
+  returns: v.id("pluginInstalls"),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return null;
     const now = Date.now();
     const existing = await ctx.db
       .query("pluginInstalls")
@@ -203,7 +192,7 @@ export const upsertInstall = mutation({
   },
 });
 
-export const upsertPolicy = mutation({
+export const upsertPolicy = adminMutation({
   args: {
     workspaceScope: v.string(),
     agentId: v.optional(v.id("agents")),
@@ -211,10 +200,8 @@ export const upsertPolicy = mutation({
     allow: v.optional(v.array(v.string())),
     deny: v.optional(v.array(v.string())),
   },
-  returns: v.union(v.id("pluginPolicies"), v.null()),
+  returns: v.id("pluginPolicies"),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return null;
     const now = Date.now();
     const existing = await ctx.db
       .query("pluginPolicies")
@@ -247,16 +234,14 @@ export const upsertPolicy = mutation({
   },
 });
 
-export const getEffectiveInstallSet = query({
+export const getEffectiveInstallSet = serviceQuery({
   args: {
-    serviceKey: v.optional(v.string()),
     workspaceScope: v.string(),
     agentId: v.optional(v.id("agents")),
     channel: v.optional(channelValidator),
   },
   returns: v.array(pluginInstallDoc),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return [];
     const layers = await Promise.all([
       getScopedInstalls(ctx, args.workspaceScope, undefined, undefined),
       getScopedInstalls(ctx, args.workspaceScope, undefined, args.channel),
@@ -275,9 +260,8 @@ export const getEffectiveInstallSet = query({
   },
 });
 
-export const getEffectivePolicy = query({
+export const getEffectivePolicy = serviceQuery({
   args: {
-    serviceKey: v.optional(v.string()),
     workspaceScope: v.string(),
     agentId: v.optional(v.id("agents")),
     channel: v.optional(channelValidator),
@@ -287,7 +271,6 @@ export const getEffectivePolicy = query({
     deny: v.optional(v.array(v.string())),
   }),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return {};
     const layers = await Promise.all([
       getScopedPolicies(ctx, args.workspaceScope, undefined, undefined),
       getScopedPolicies(ctx, args.workspaceScope, undefined, args.channel),
@@ -316,16 +299,14 @@ export const getEffectivePolicy = query({
   },
 });
 
-export const upsertDiagnostics = mutation({
+export const upsertDiagnostics = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     name: v.string(),
     diagnosticStatus: diagnosticStatusValidator,
     diagnosticMessages: v.array(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     const existing = await ctx.db
       .query("pluginDefinitions")
       .withIndex("by_name", (q) => q.eq("name", args.name))
@@ -341,11 +322,12 @@ export const upsertDiagnostics = mutation({
         updatedAt: now,
       });
     }
+    return null;
   },
 });
 
-export const listDiagnostics = query({
-  args: { serviceKey: v.optional(v.string()) },
+export const listDiagnostics = serviceQuery({
+  args: {},
   returns: v.array(
     v.object({
       name: v.string(),
@@ -354,8 +336,7 @@ export const listDiagnostics = query({
       lastDiagnosticAt: v.optional(v.number()),
     }),
   ),
-  handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return [];
+  handler: async (ctx) => {
     const defs = await ctx.db.query("pluginDefinitions").collect();
     return defs.map((d) => ({
       name: d.name,

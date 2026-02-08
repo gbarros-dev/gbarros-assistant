@@ -1,23 +1,21 @@
 import { v } from "convex/values";
 
-import { internalMutation, mutation } from "./_generated/server";
-import { isValidServiceKey } from "./lib/auth";
+import { internalMutation } from "./_generated/server";
+import { serviceMutation } from "./auth";
 
 /**
  * Atomic check-and-register for inbound message deduplication.
  * Returns `isDuplicate: true` if the message was already seen.
  * Convex mutations are serialized, so the read-then-write is atomic.
  */
-export const checkAndRegister = mutation({
+export const checkAndRegister = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
     channelMessageId: v.string(),
     accountId: v.optional(v.string()),
   },
   returns: v.object({ isDuplicate: v.boolean() }),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return { isDuplicate: true };
     const existing = await ctx.db
       .query("inboundDedupe")
       .withIndex("by_channel_messageId", (q) =>

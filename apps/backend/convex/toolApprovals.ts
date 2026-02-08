@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 
-import { internalMutation, mutation, query } from "./_generated/server";
-import { getConversationIfOwner, isValidServiceKey } from "./lib/auth";
+import { internalMutation } from "./_generated/server";
+import { authMutation, authQuery, serviceMutation, serviceQuery } from "./auth";
+import { getConversationIfOwnedByUser } from "./lib/auth";
 
 /** Must match APPROVAL_TIMEOUT_MS in apps/agent/src/agent/tool-approval.ts */
 const APPROVAL_TTL_MS = 5 * 60 * 1_000;
@@ -19,18 +20,16 @@ const toolApprovalDoc = v.object({
   resolvedAt: v.optional(v.number()),
 });
 
-export const create = mutation({
+export const create = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     conversationId: v.id("conversations"),
     jobId: v.id("agentQueue"),
     toolName: v.string(),
     toolInput: v.any(),
     channel: v.union(v.literal("web"), v.literal("whatsapp")),
   },
-  returns: v.union(v.id("toolApprovals"), v.null()),
+  returns: v.id("toolApprovals"),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     return await ctx.db.insert("toolApprovals", {
       conversationId: args.conversationId,
       jobId: args.jobId,
@@ -43,7 +42,7 @@ export const create = mutation({
   },
 });
 
-export const resolve = mutation({
+export const resolve = authMutation({
   args: {
     approvalId: v.id("toolApprovals"),
     status: v.union(v.literal("approved"), v.literal("rejected")),
@@ -53,13 +52,12 @@ export const resolve = mutation({
     const approval = await ctx.db.get(args.approvalId);
     if (!approval || approval.status !== "pending") return null;
 
-    // Verify ownership when called by an authenticated user (web).
-    // Agent calls have no identity and bypass this check (secured at network level).
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity) {
-      const conv = await getConversationIfOwner(ctx, approval.conversationId);
-      if (!conv) return null;
-    }
+    const conv = await getConversationIfOwnedByUser(
+      ctx,
+      ctx.auth.user._id,
+      approval.conversationId,
+    );
+    if (!conv) return null;
 
     await ctx.db.patch(args.approvalId, {
       status: args.status,
@@ -70,17 +68,29 @@ export const resolve = mutation({
   },
 });
 
-export const getPendingByConversation = query({
+export const resolveService = serviceMutation({
+  args: {
+    approvalId: v.id("toolApprovals"),
+    status: v.union(v.literal("approved"), v.literal("rejected")),
+  },
+  returns: v.union(toolApprovalDoc, v.null()),
+  handler: async (ctx, args) => {
+    const approval = await ctx.db.get(args.approvalId);
+    if (!approval || approval.status !== "pending") return null;
+    await ctx.db.patch(args.approvalId, {
+      status: args.status,
+      resolvedAt: Date.now(),
+    });
+    return approval;
+  },
+});
+
+export const getPendingByConversation = authQuery({
   args: { conversationId: v.id("conversations") },
   returns: v.array(toolApprovalDoc),
   handler: async (ctx, args) => {
-    // Verify ownership when called by an authenticated user (web).
-    // Agent calls have no identity and bypass this check (secured at network level).
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity) {
-      const conv = await getConversationIfOwner(ctx, args.conversationId);
-      if (!conv) return [];
-    }
+    const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, args.conversationId);
+    if (!conv) return [];
 
     return await ctx.db
       .query("toolApprovals")
@@ -91,7 +101,20 @@ export const getPendingByConversation = query({
   },
 });
 
-export const getPendingByJob = query({
+export const getPendingByConversationService = serviceQuery({
+  args: { conversationId: v.id("conversations") },
+  returns: v.array(toolApprovalDoc),
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("toolApprovals")
+      .withIndex("by_conversationId_status", (q) =>
+        q.eq("conversationId", args.conversationId).eq("status", "pending"),
+      )
+      .collect();
+  },
+});
+
+export const getPendingByJob = serviceQuery({
   args: { jobId: v.id("agentQueue") },
   returns: v.array(toolApprovalDoc),
   handler: async (ctx, args) => {
@@ -103,7 +126,7 @@ export const getPendingByJob = query({
   },
 });
 
-export const getByJob = query({
+export const getByJob = serviceQuery({
   args: { jobId: v.id("agentQueue") },
   returns: v.array(toolApprovalDoc),
   handler: async (ctx, args) => {

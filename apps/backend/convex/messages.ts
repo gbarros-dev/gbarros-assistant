@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
-import { getConversationIfOwner, isValidServiceKey } from "./lib/auth";
+import { authMutation, authQuery, serviceMutation } from "./auth";
+import { getConversationIfOwnedByUser } from "./lib/auth";
 
 const toolCallValidator = v.optional(
   v.array(
@@ -30,7 +30,7 @@ const messageDoc = v.object({
   ),
 });
 
-export const send = mutation({
+export const send = authMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
@@ -38,13 +38,8 @@ export const send = mutation({
   },
   returns: v.union(v.id("messages"), v.null()),
   handler: async (ctx, args) => {
-    // Verify ownership when called by an authenticated user (web).
-    // Agent calls have no identity and bypass this check (secured at network level).
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity) {
-      const conv = await getConversationIfOwner(ctx, args.conversationId);
-      if (!conv) return null;
-    }
+    const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, args.conversationId);
+    if (!conv) return null;
 
     const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
@@ -70,17 +65,47 @@ export const send = mutation({
   },
 });
 
-export const addAssistantMessage = mutation({
+export const sendService = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
+    conversationId: v.id("conversations"),
+    content: v.string(),
+    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+  },
+  returns: v.id("messages"),
+  handler: async (ctx, args) => {
+    const messageId = await ctx.db.insert("messages", {
+      conversationId: args.conversationId,
+      role: "user",
+      content: args.content,
+      channel: args.channel,
+      status: "sent",
+    });
+
+    const conversation = await ctx.db.get(args.conversationId);
+    if (conversation && (!conversation.title || conversation.title === "New chat")) {
+      const title = args.content.length > 50 ? `${args.content.slice(0, 50)}…` : args.content;
+      await ctx.db.patch(args.conversationId, { title });
+    }
+
+    await ctx.db.insert("agentQueue", {
+      messageId,
+      conversationId: args.conversationId,
+      status: "pending",
+    });
+
+    return messageId;
+  },
+});
+
+export const addAssistantMessage = serviceMutation({
+  args: {
     conversationId: v.id("conversations"),
     content: v.string(),
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
     toolCalls: toolCallValidator,
   },
-  returns: v.union(v.id("messages"), v.null()),
+  returns: v.id("messages"),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     return await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       role: "assistant",
@@ -92,16 +117,14 @@ export const addAssistantMessage = mutation({
   },
 });
 
-export const addSummaryMessage = mutation({
+export const addSummaryMessage = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     conversationId: v.id("conversations"),
     content: v.string(),
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
   },
-  returns: v.union(v.id("messages"), v.null()),
+  returns: v.id("messages"),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     return await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       role: "system",
@@ -112,15 +135,13 @@ export const addSummaryMessage = mutation({
   },
 });
 
-export const createPlaceholder = mutation({
+export const createPlaceholder = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     conversationId: v.id("conversations"),
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
   },
-  returns: v.union(v.id("messages"), v.null()),
+  returns: v.id("messages"),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     return await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       role: "assistant",
@@ -132,43 +153,41 @@ export const createPlaceholder = mutation({
   },
 });
 
-export const updateStreamingContent = mutation({
+export const updateStreamingContent = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     messageId: v.id("messages"),
     content: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     await ctx.db.patch(args.messageId, { content: args.content });
+    return null;
   },
 });
 
-export const finalizeMessage = mutation({
+export const finalizeMessage = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     messageId: v.id("messages"),
     content: v.string(),
     toolCalls: toolCallValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     await ctx.db.patch(args.messageId, {
       content: args.content,
       toolCalls: args.toolCalls,
       streaming: false,
       status: "sent",
     });
+    return null;
   },
 });
 
-export const listByConversation = query({
+export const listByConversation = authQuery({
   args: { conversationId: v.id("conversations") },
   returns: v.array(messageDoc),
   handler: async (ctx, args) => {
-    const conv = await getConversationIfOwner(ctx, args.conversationId);
+    const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, args.conversationId);
     if (!conv) return [];
     return await ctx.db
       .query("messages")
@@ -177,13 +196,13 @@ export const listByConversation = query({
   },
 });
 
-export const get = query({
+export const get = authQuery({
   args: { id: v.id("messages") },
   returns: v.union(messageDoc, v.null()),
   handler: async (ctx, args) => {
     const msg = await ctx.db.get(args.id);
     if (!msg) return null;
-    const conv = await getConversationIfOwner(ctx, msg.conversationId);
+    const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, msg.conversationId);
     if (!conv) return null;
     return msg;
   },

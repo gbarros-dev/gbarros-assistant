@@ -1,8 +1,8 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
+import { serviceMutation, serviceQuery } from "./auth";
 
-export const get = query({
+export const get = serviceQuery({
   args: { key: v.string() },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
@@ -14,7 +14,7 @@ export const get = query({
   },
 });
 
-export const set = mutation({
+export const set = serviceMutation({
   args: { key: v.string(), data: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -31,10 +31,11 @@ export const set = mutation({
         data: args.data,
       });
     }
+    return null;
   },
 });
 
-export const remove = mutation({
+export const remove = serviceMutation({
   args: { key: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -46,10 +47,11 @@ export const remove = mutation({
     if (existing) {
       await ctx.db.delete(existing._id);
     }
+    return null;
   },
 });
 
-export const getAll = query({
+export const getAll = serviceQuery({
   args: {},
   returns: v.array(
     v.object({
@@ -64,7 +66,7 @@ export const getAll = query({
   },
 });
 
-export const clearAll = mutation({
+export const clearAll = serviceMutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {

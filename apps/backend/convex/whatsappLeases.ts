@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
-import { isValidServiceKey } from "./lib/auth";
+import { serviceMutation, serviceQuery } from "./auth";
 
 const leaseDoc = v.object({
   _id: v.id("whatsappLeases"),
@@ -23,17 +22,15 @@ const accountDoc = v.object({
   updatedAt: v.number(),
 });
 
-export const upsertAccount = mutation({
+export const upsertAccount = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     accountId: v.string(),
     phone: v.string(),
     enabled: v.boolean(),
     meta: v.optional(v.any()),
   },
-  returns: v.union(v.id("whatsappAccounts"), v.null()),
+  returns: v.id("whatsappAccounts"),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     const now = Date.now();
     const existing = await ctx.db
       .query("whatsappAccounts")
@@ -61,19 +58,17 @@ export const upsertAccount = mutation({
   },
 });
 
-export const listEnabledAccounts = query({
-  args: { serviceKey: v.optional(v.string()) },
+export const listEnabledAccounts = serviceQuery({
+  args: {},
   returns: v.array(accountDoc),
-  handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return [];
+  handler: async (ctx) => {
     const accounts = await ctx.db.query("whatsappAccounts").collect();
     return accounts.filter((a) => a.enabled);
   },
 });
 
-export const acquireLease = mutation({
+export const acquireLease = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     accountId: v.string(),
     ownerId: v.string(),
     ttlMs: v.optional(v.number()),
@@ -84,7 +79,6 @@ export const acquireLease = mutation({
     expiresAt: v.optional(v.number()),
   }),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return { acquired: false };
     const now = Date.now();
     const ttlMs = Math.max(10_000, args.ttlMs ?? 45_000);
     const existing = await ctx.db
@@ -123,16 +117,14 @@ export const acquireLease = mutation({
   },
 });
 
-export const heartbeatLease = mutation({
+export const heartbeatLease = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     accountId: v.string(),
     ownerId: v.string(),
     ttlMs: v.optional(v.number()),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return false;
     const now = Date.now();
     const ttlMs = Math.max(10_000, args.ttlMs ?? 45_000);
     const lease = await ctx.db
@@ -151,15 +143,13 @@ export const heartbeatLease = mutation({
   },
 });
 
-export const releaseLease = mutation({
+export const releaseLease = serviceMutation({
   args: {
-    serviceKey: v.optional(v.string()),
     accountId: v.string(),
     ownerId: v.string(),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return false;
     const lease = await ctx.db
       .query("whatsappLeases")
       .withIndex("by_accountId", (q) => q.eq("accountId", args.accountId))
@@ -170,11 +160,10 @@ export const releaseLease = mutation({
   },
 });
 
-export const listOwnedAccounts = query({
-  args: { serviceKey: v.optional(v.string()), ownerId: v.string() },
+export const listOwnedAccounts = serviceQuery({
+  args: { ownerId: v.string() },
   returns: v.array(v.string()),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return [];
     const now = Date.now();
     const leases = await ctx.db
       .query("whatsappLeases")
@@ -184,11 +173,10 @@ export const listOwnedAccounts = query({
   },
 });
 
-export const getLease = query({
-  args: { serviceKey: v.optional(v.string()), accountId: v.string() },
+export const getLease = serviceQuery({
+  args: { accountId: v.string() },
   returns: v.union(leaseDoc, v.null()),
   handler: async (ctx, args) => {
-    if (!isValidServiceKey(args.serviceKey)) return null;
     return await ctx.db
       .query("whatsappLeases")
       .withIndex("by_accountId", (q) => q.eq("accountId", args.accountId))

@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
-import { getAuthUser } from "./lib/auth";
+import { adminMutation, adminQuery } from "./auth";
 
 const skillConfigValidator = v.optional(
   v.object({
@@ -24,22 +23,18 @@ const skillDoc = v.object({
   config: skillConfigValidator,
 });
 
-export const list = query({
+export const list = adminQuery({
   args: {},
   returns: v.array(skillDoc),
   handler: async (ctx) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return [];
     return await ctx.db.query("skills").collect();
   },
 });
 
-export const getByName = query({
+export const getByName = adminQuery({
   args: { name: v.string() },
   returns: v.union(skillDoc, v.null()),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return null;
     return await ctx.db
       .query("skills")
       .withIndex("by_name", (q) => q.eq("name", args.name))
@@ -47,34 +42,31 @@ export const getByName = query({
   },
 });
 
-export const create = mutation({
+export const create = adminMutation({
   args: {
     name: v.string(),
     description: v.string(),
     enabled: v.boolean(),
     config: skillConfigValidator,
   },
-  returns: v.union(v.id("skills"), v.null()),
+  returns: v.id("skills"),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return null;
     return await ctx.db.insert("skills", args);
   },
 });
 
-export const toggle = mutation({
+export const toggle = adminMutation({
   args: { id: v.id("skills") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return null;
     const skill = await ctx.db.get(args.id);
-    if (!skill) return;
+    if (!skill) return null;
     await ctx.db.patch(args.id, { enabled: !skill.enabled });
+    return null;
   },
 });
 
-export const update = mutation({
+export const update = adminMutation({
   args: {
     id: v.id("skills"),
     name: v.optional(v.string()),
@@ -84,19 +76,17 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return null;
     const { id, ...fields } = args;
     await ctx.db.patch(id, fields);
+    return null;
   },
 });
 
-export const remove = mutation({
+export const remove = adminMutation({
   args: { id: v.id("skills") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) return null;
     await ctx.db.delete(args.id);
+    return null;
   },
 });
