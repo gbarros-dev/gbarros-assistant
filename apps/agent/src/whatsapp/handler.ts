@@ -27,6 +27,7 @@ export async function handleIncomingMessage(message: WAMessage) {
   const channelMessageId = message.key.id;
   if (channelMessageId) {
     const { isDuplicate } = await client.mutation(api.inboundDedupe.checkAndRegister, {
+      serviceKey: env.AGENT_SECRET,
       channel: "whatsapp",
       channelMessageId,
     });
@@ -43,15 +44,19 @@ export async function handleIncomingMessage(message: WAMessage) {
     }
   }
 
-  let contact = await client.query(api.contacts.getByPhone, { phone });
+  let contact = await client.query(api.contacts.getByPhone, {
+    serviceKey: env.AGENT_SECRET,
+    phone,
+  });
 
   if (!contact) {
     await client.mutation(api.contacts.create, {
+      serviceKey: env.AGENT_SECRET,
       phone,
       name: phone,
       isAllowed: false,
     });
-    contact = await client.query(api.contacts.getByPhone, { phone });
+    contact = await client.query(api.contacts.getByPhone, { serviceKey: env.AGENT_SECRET, phone });
   }
 
   if (!contact || !contact.isAllowed) {

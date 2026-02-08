@@ -20,6 +20,7 @@ async function acquireLease(accountId: string, ownerId: string): Promise<void> {
 
   while (true) {
     const lease = await client.mutation(api.whatsappLeases.acquireLease, {
+      serviceKey: env.AGENT_SECRET,
       accountId,
       ownerId,
       ttlMs: env.WHATSAPP_LEASE_TTL_MS,
@@ -29,7 +30,7 @@ async function acquireLease(accountId: string, ownerId: string): Promise<void> {
       typedEvent.info("whatsapp.lease.acquire.success", {
         accountId,
         ownerId,
-        expiresAt: lease.expiresAt,
+        expiresAt: lease.expiresAt!,
       });
       return;
     }
@@ -41,7 +42,7 @@ async function acquireLease(accountId: string, ownerId: string): Promise<void> {
       accountId,
       ownerId,
       currentOwnerId: lease.ownerId ?? "unknown",
-      expiresAt: lease.expiresAt,
+      expiresAt: lease.expiresAt!,
     });
     await sleep(3_000);
   }
@@ -111,6 +112,7 @@ export async function startWhatsAppRuntime(options: WhatsAppRuntimeOptions): Pro
   const heartbeatMs = Math.max(5_000, env.WHATSAPP_HEARTBEAT_MS ?? 15_000);
 
   await client.mutation(api.whatsappLeases.upsertAccount, {
+    serviceKey: env.AGENT_SECRET,
     accountId,
     phone: env.WHATSAPP_PHONE ?? accountId,
     enabled: true,
@@ -122,6 +124,7 @@ export async function startWhatsAppRuntime(options: WhatsAppRuntimeOptions): Pro
   setInterval(() => {
     client
       .mutation(api.whatsappLeases.heartbeatLease, {
+        serviceKey: env.AGENT_SECRET,
         accountId,
         ownerId,
         ttlMs: env.WHATSAPP_LEASE_TTL_MS,
@@ -151,6 +154,7 @@ export async function startWhatsAppRuntime(options: WhatsAppRuntimeOptions): Pro
   const release = async () => {
     try {
       await client.mutation(api.whatsappLeases.releaseLease, {
+        serviceKey: env.AGENT_SECRET,
         accountId,
         ownerId,
       });
